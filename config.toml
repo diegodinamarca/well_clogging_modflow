@@ -1,26 +1,25 @@
 [executables]
-modflow = "C:/Simcore/PM8/modflow2005/mf2005"
+modflow = "/home/diego/modflow/modflow6/bin/mf6"
 mt3dms = "C:/Simcore/PM8/mt3dms/mt3dms5b"
 
-[paths]
-head_l1 = "assets/head_L1.tif"
-head_l2 = "assets/head_L2.tif"
-walls = "assets/cement_walls.tif"
-wells = "assets/wells.tif"
-mask = "assets/study_area_extent_100m.geojson"
-walls_mask = "assets/walls_mask.tif"
+[folders]
+model_workspace = "test1"
+modelname_mf= "flow_model"
+modelname_mt = 'transport_model'
 figures = "figures"
 
 [grid]
 ztop = -3
-zbot = [-8, -18, -38, -58.0, -63.0, -103.0]
-nlay = 6
-k_values = [20.0, 20.0, 80.0, 40.0, 0.01, 50.0]
-laytyp = [1, 1, 1, 1, 0, 0]
+zbot = [-25, -50]
+nlay = 2
+k_values = [20.0, 10]
+laytyp = [1, 1]
 vertical_conductivity_percent = 10.0
 specific_storage = 0.0001
 nrow = 20
 ncol = 20
+delr = 10
+delc = 10
 
 [time]
 nper_mf = 2
