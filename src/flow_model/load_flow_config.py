@@ -11,16 +11,8 @@ from pathlib import Path
 
 import numpy as np
 
-from load_head_file import *
-from load_walls import *
-from load_wells import *
-from load_init_conc import *
-from generate_random_field import generateRandomField, saveKFieldPlot, saveconcFieldPlot
 
-
-def load_flow_config(sandLensPerc=None, recharge=None, randomFields=None, pumpRate=None,
-                     conc_values=None, randomConcFields=None, heterogeneousClay=None,
-                     addWells=None, config_path=None):
+def load_flow_config(config_path=None):
     """Load model inputs from TOML and build the derived flow configuration."""
     if config_path is None:
         config_path = Path(__file__).resolve().parent.parent / "config.toml"
@@ -35,31 +27,19 @@ def load_flow_config(sandLensPerc=None, recharge=None, randomFields=None, pumpRa
         return str(path if path.is_absolute() else config_dir / path)
 
     executables = config["executables"]
-    paths = config["paths"]
     grid = config["grid"]
     time = config["time"]
     hydrology = config["hydrology"]
     transport = config["transport"]
     runtime = config["runtime"]
-
-    sandLensPerc = runtime.get("sand_lens_percentage", 0.1) if sandLensPerc is None else sandLensPerc
-    recharge = hydrology["recharge"] if recharge is None else recharge
-    randomFields = runtime["random_fields"] if randomFields is None else randomFields
-    pumpRate = hydrology["pump_rate"] if pumpRate is None else pumpRate
-    randomConcFields = runtime["random_concentration_fields"] if randomConcFields is None else randomConcFields
-    heterogeneousClay = runtime["heterogeneous_clay"] if heterogeneousClay is None else heterogeneousClay
-    addWells = runtime["add_wells"] if addWells is None else addWells
+    folders = config["folders"]
 
     # ===== PATHS =====
     exe_name_mf = executables["modflow"]
     exe_name_mt = executables["mt3dms"]
-    headfile_L1 = configured_path("paths", "head_l1")
-    headfile_L2 = configured_path("paths", "head_l2")
-    walls_file = configured_path("paths", "walls")
-    wells_file = configured_path("paths", "wells")
-    mask_file = configured_path("paths", "mask")
-    wall_mask_file = configured_path("paths", "walls_mask")
-    figures_path = configured_path("paths", "figures")
+    model_ws = folders["model_workspace"]
+    modelname_mf = folders["modelname_mf"]
+    modelname_mt = folders["modelname_mt"]
 
     # ===== SPATIAL DISCRETIZATION =====
 
@@ -68,11 +48,13 @@ def load_flow_config(sandLensPerc=None, recharge=None, randomFields=None, pumpRa
     nlay = grid["nlay"]
     nrow = grid["nrow"]
     ncol = grid["ncol"]
-
+    delr = grid["delr"]
+    delc = grid["delc"]
+    
     # ===== INITIAL HEAD =====
-    # strt = np.ones((nlay, nrow, ncol), dtype=np.float32) * 25.0
-    # strt[:, :, 0] = 25.0
-    # strt[:, :, -1] = 24.5
+    strt = np.ones((nlay, nrow, ncol), dtype=np.float32) * 25.0
+    strt[:, :, 0] = 25.0
+    strt[:, :, -1] = 24.5
     
     # ===== BOUNDARY CONDITIONS =====
     ibound = np.ones((nlay, nrow, ncol), dtype=np.int32)
@@ -80,18 +62,6 @@ def load_flow_config(sandLensPerc=None, recharge=None, randomFields=None, pumpRa
     ibound[:, :, -1] = -1
     ibound[:, 0, :] = -1
     ibound[:, -1, :] = -1
-    
-    # strt = np.ones((nlay, nrow, ncol), dtype=np.float32)
-    # strt[:5, -1, 0] = 0
-    # strt[:5, 0, -1] = 0.25
-    # strt[5, 0, 0] = -0.25
-    # strt[5, -1, -1] = 0
-
-    # ibound = np.ones((nlay, nrow, ncol), dtype=np.int32)
-    # ibound[:5, 0, 0] = -1
-    # ibound[:5, -1, -1] = -1
-    # ibound[5, -1, 0] = -1
-    # ibound[5, 0, -1] = -1
 
     # ===== WELL INPUT ===== #
 
@@ -110,7 +80,7 @@ def load_flow_config(sandLensPerc=None, recharge=None, randomFields=None, pumpRa
     # ===== TRANSPORT PARAMS (MT3DMS) =====
     prsity = transport["porosity"]
     # ===== RECHARGE ====== #
-    rech = hydrology["recharge_infiltration_factor"] * recharge
+    rech = hydrology["recharge_infiltration_factor"]
 
     # ===== TIME DISCRETIZATION =====
     nper_mf = time["nper_mf"]
@@ -142,10 +112,6 @@ def load_flow_config(sandLensPerc=None, recharge=None, randomFields=None, pumpRa
 
     # ===== ARRAYS =====
     icbund = np.ones((nlay, nrow, ncol), dtype=np.int32)
-    sconc_array = np.zeros((nlay, nrow, ncol), dtype=np.float32)
-
-    # load initial concentrations to array
-    sconc_array[0, :, :] = init_conc
     
     # ===== OBSERVATION POINT =====
     obs_row = transport["observation_row"]
@@ -169,21 +135,23 @@ def load_flow_config(sandLensPerc=None, recharge=None, randomFields=None, pumpRa
         # --- executables ---
         "exe_name_mf": exe_name_mf,
         "exe_name_mt": exe_name_mt,
-        
+
+        # --- folders ---
+        "model_ws": model_ws,
+        "modelname_mf": modelname_mf,
+        "modelname_mt": modelname_mt,
         # --- input files ---
-        "headfile_L1": headfile_L1,
 
         # --- grid ---
         "nlay": nlay,
         "nrow": nrow,
         "ncol": ncol,
-        "delr": delr,
-        "delc": delc,
         "ztop": ztop,
         "zbot": zbot,
-        
+        "delr": delr,
+        "delc": delc,
         # --- well ---
-        "wel_spd": wel_spd,
+        # "wel_spd": wel_spd,
 
         # --- time ---
         "nper_mf": nper_mf,
@@ -216,13 +184,13 @@ def load_flow_config(sandLensPerc=None, recharge=None, randomFields=None, pumpRa
         "silent": runtime["silent"],
         "report": runtime["report"],
 
-        # --- metadata (no usado directamente por flopy pero útil) ---
-        "Lx": Lx,
-        "Ly": Ly,
+        # # --- metadata (no usado directamente por flopy pero útil) ---
+        # "Lx": Lx,
+        # "Ly": Ly,
 
         # --- basic transport ---
         "icbund": icbund,
-        "sconc_array": sconc_array,
+        "sconc": sconc,
 
         # --- dispersion ---
         "al": al,

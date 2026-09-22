@@ -6,13 +6,13 @@ Created on Thu Apr 23 11:00:29 2026
 """
 
 import flopy
-from flow_model.create_bas_package import create_bas_package
-from flow_model.create_dis_package import create_dis_package
-from flow_model.create_lmt_package import create_lmt_package
-from flow_model.create_lpf_package import create_lpf_package
-from flow_model.create_oc_package import create_oc_package
-from flow_model.create_pcg_package import create_pcg_package
-from flow_model.create_wel_package import create_wel_package
+from create_bas_package import create_bas_package
+from create_dis_package import create_dis_package
+from create_lmt_package import create_lmt_package
+from create_lpf_package import create_lpf_package
+from create_oc_package import create_oc_package
+from create_pcg_package import create_pcg_package
+from create_wel_package import create_wel_package
 
 
 def create_flow_model(modelname_mf, model_ws, param_dic):
