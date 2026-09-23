@@ -21,6 +21,9 @@ ncol = 20
 delr = 10
 delc = 10
 
+[methods]
+conductivity = "avgK"
+
 [time]
 nper_mf = 2
 nper_mt = 2
