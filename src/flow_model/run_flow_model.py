@@ -2,7 +2,6 @@ from load_flow_config import load_flow_config
 from create_flow_model import create_flow_model
 
 
-
 def run_flow_model(config_path):
     """Run the flow model using the provided configuration."""
     param_dic = load_flow_config(config_path = config_path)

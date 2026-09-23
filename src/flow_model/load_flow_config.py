@@ -11,6 +11,8 @@ from pathlib import Path
 
 import numpy as np
 
+from create_hyd_params import create_hyd_params
+
 
 def load_flow_config(config_path=None):
     """Load model inputs from TOML and build the derived flow configuration."""
@@ -33,6 +35,7 @@ def load_flow_config(config_path=None):
     transport = config["transport"]
     runtime = config["runtime"]
     folders = config["folders"]
+    methods = config["methods"]
 
     # ===== PATHS =====
     exe_name_mf = executables["modflow"]
@@ -66,16 +69,7 @@ def load_flow_config(config_path=None):
     # ===== WELL INPUT ===== #
 
     # ===== HYDRAULIC PARAMETERS =====
-
-    # list of K values, one per layer (length must equal nlay)
-    k_values = np.array(grid["k_values"], dtype=float)
-    # hk has shape (nlay, nrow, ncol)
-    hk = np.ones((nlay, nrow, ncol), dtype=float) * k_values[:, None, None]
-        
-    # Assume vertical conductivity is n% of horizontal
-    vka = hk * grid["vertical_conductivity_percent"] / 100
-    ss = grid["specific_storage"]
-    laytyp = grid["laytyp"]
+    hk, vka, ss, laytyp = create_hyd_params(grid, nlay, nrow, ncol, method=methods["conductivity"])
 
     # ===== TRANSPORT PARAMS (MT3DMS) =====
     prsity = transport["porosity"]
