@@ -13,7 +13,7 @@ from transport_model.create_dsp_package import create_dsp_package
 from transport_model.create_gcg_package import create_gcg_package
 from transport_model.create_rct_package import create_rct_package
 from transport_model.create_ssm_package import create_ssm_package
-
+from transport_model.create_conc_array import create_conc_array
 
 def create_transport_model(modelname_mt, model_ws, mf, param_dic,
                            kd = 0.001, alpha = 1, lambda1 = 0.0, isothm = 0, ireact = 0, igetsc = 0):
@@ -36,7 +36,7 @@ def create_transport_model(modelname_mt, model_ws, mf, param_dic,
     exe_name_mt : str
     icbund : array-like
     prsity : float or array-like
-    sconc_array : array-like
+    sconc : array-like
     obs_row : int
     obs_col : int
     perlen_list : list
@@ -73,7 +73,7 @@ def create_transport_model(modelname_mt, model_ws, mf, param_dic,
 
     icbund = param_dic["icbund"]
     prsity = param_dic["prsity"]
-    sconc_array = param_dic["sconc_array"]
+    sconc = param_dic["sconc"]
 
     obs_row = param_dic["obs_row"]
     obs_col = param_dic["obs_col"]
@@ -88,7 +88,6 @@ def create_transport_model(modelname_mt, model_ws, mf, param_dic,
     c0 = param_dic["c0"]
     source_row = param_dic["source_row"]
     source_col = param_dic["source_col"]
-
     rhob = param_dic["rhob"]
 
     # ---------- Optional parameters ----------
@@ -127,7 +126,7 @@ def create_transport_model(modelname_mt, model_ws, mf, param_dic,
     timprs = np.linspace(0, 46000, 52)
     # ===== BASIC TRANSPORT PACKAGE =====
     btn = create_btn_package(
-        mt, icbund, prsity, sconc_array, ncomp, obs_row, obs_col,
+        mt, icbund, prsity, sconc, ncomp, obs_row, obs_col,
         perlen_list, nper, timprs
     )
 
@@ -157,12 +156,4 @@ def create_transport_model(modelname_mt, model_ws, mf, param_dic,
     # ===== RUN MT3DMS =====
     print("Running MT3DMS...")
     success_mt, buff_mt = mt.run_model(silent=silent, report=report)
-    
-    if success_mt:
-        print("\n" + "="*50)
-        print("MT3DMS completed successfully!")
-        print("="*50)
-    else:
-        print("\nMT3DMS failed! Check the output for errors.")
-
     return mt, success_mt, buff_mt
