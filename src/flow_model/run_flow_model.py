@@ -1,5 +1,5 @@
-from load_flow_config import load_flow_config
-from create_flow_model import create_flow_model
+from .load_flow_config import load_flow_config
+from .create_flow_model import create_flow_model
 
 
 def run_flow_model(config_path):

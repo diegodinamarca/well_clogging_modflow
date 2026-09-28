@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
-from create_hyd_params import create_hyd_params
+from .create_hyd_params import create_hyd_params
 
 
 def load_flow_config(config_path=None):
@@ -96,9 +96,6 @@ def load_flow_config(config_path=None):
     c0 = transport["initial_concentration"]
     sconc = transport["initial_sorbed_concentration"]
     
-    # files with initial concentrations for different contaminant species
-    print("No concentration values provided. Using default values with contaminant only in layer 1.")
-    init_conc = np.array([1, 0, 0, 0, 0, 0], dtype=float)
 
     # periods for injection of contaminants (not used)
     active_periods = [c0, 0.0]
@@ -106,7 +103,11 @@ def load_flow_config(config_path=None):
 
     # ===== ARRAYS =====
     icbund = np.ones((nlay, nrow, ncol), dtype=np.int32)
+    sconc = np.zeros((nlay, nrow, ncol), dtype=np.float32)
     
+    # load initial concentrations to array
+    sconc[:, :, :] = c0  # Set all cells to the specified concentration value
+
     # ===== OBSERVATION POINT =====
     obs_row = transport["observation_row"]
     obs_col = transport["observation_column"]

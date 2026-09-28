@@ -6,13 +6,13 @@ Created on Thu Apr 23 11:00:29 2026
 """
 
 import flopy
-from create_bas_package import create_bas_package
-from create_dis_package import create_dis_package
-from create_lmt_package import create_lmt_package
-from create_lpf_package import create_lpf_package
-from create_oc_package import create_oc_package
-from create_pcg_package import create_pcg_package
-from create_wel_package import create_wel_package
+from .create_bas_package import create_bas_package
+from .create_dis_package import create_dis_package
+from .create_lmt_package import create_lmt_package
+from .create_lpf_package import create_lpf_package
+from .create_oc_package import create_oc_package
+from .create_pcg_package import create_pcg_package
+from .create_wel_package import create_wel_package
 
 
 def create_flow_model(modelname_mf, model_ws, param_dic):
@@ -155,12 +155,4 @@ def create_flow_model(modelname_mf, model_ws, param_dic):
     # ===== RUN MODFLOW =====
     print("Running MODFLOW...")
     success, buff = mf.run_model(silent=silent, report=report)
-
-    if success:
-        print("\n" + "=" * 50)
-        print("MODFLOW completed successfully!")
-        print("=" * 50)
-    else:
-        print("\nMODFLOW failed! Check the listing file for errors.")
-
     return mf, success, buff
