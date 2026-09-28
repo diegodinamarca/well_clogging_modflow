@@ -1,14 +1,24 @@
+from pathlib import Path
+
+from flow_model.load_flow_config import load_flow_config
 from flow_model.run_flow_model import run_flow_model
 from transport_model.run_transport_model import run_transport_model
 
 
-def run_models(config_path):
-	mf, success, buff = run_flow_model(config_path)
-	print(f"Flow model completed. Success: {success}")
-	mf, mt, success_mt, buff_mt = run_transport_model(config_path, mf=mf)
-	print(f"Transport model completed. Success: {success_mt}")
+def run_models(param_dic = None):
+    """Run the flow and transport models using the provided configuration."""
+    if param_dic is None:
+        raise ValueError("param_dic must be provided to run the models.")
+    
+    print("Running Flow model...")
+    mf, success, buff = run_flow_model(param_dic)
+    print(f"Flow model completed. Success: {success}")
+    mf, mt, success_mt, buff_mt = run_transport_model(param_dic, mf=mf)
+    print(f"Transport model completed. Success: {success_mt}")
+    return mf, mt, buff, buff_mt
 
 
 if __name__ == "__main__":
-	config_path = "./test1/config.toml"
-	run_models(config_path)
+    config_path = Path(__file__).resolve().parent.parent / "test1" / "config.toml"
+    param_dic = load_flow_config(config_path=config_path)
+    run_models(param_dic)

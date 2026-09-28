@@ -1,10 +1,10 @@
 from flow_model.load_flow_config import load_flow_config
 from transport_model.create_transport_model import create_transport_model
 
-def run_transport_model(config_path, mf = None):
+def run_transport_model(param_dic = None, mf = None):
     """Run the transport model using the provided configuration."""
-    param_dic = load_flow_config(config_path=config_path)
-    print("Config loaded successfully")
+    if param_dic is None:
+        raise ValueError("param_dic must be provided to run the transport model.")
     # read model_ws, modelname_mf, modelname_mt from param_dic
     model_ws = param_dic.get("model_ws")
     modelname_mf = param_dic.get("modelname_mf")
@@ -31,5 +31,7 @@ def run_transport_model(config_path, mf = None):
 
 if __name__ == "__main__":
     config_path = "./test1/config.toml"
-    mf, mt, success_mt, buff_mt = run_transport_model(config_path)
+    param_dic = load_flow_config(config_path = config_path)
+    print("Config loaded successfully")
+    mf, mt, success_mt, buff_mt = run_transport_model(param_dic)
     print(f"Transport model creation completed. Success: {success_mt}")

@@ -18,15 +18,9 @@ def load_flow_config(config_path=None):
     """Load model inputs from TOML and build the derived flow configuration."""
     if config_path is None:
         config_path = Path(__file__).resolve().parent.parent / "config.toml"
-    config_path = Path(config_path)
+    config_path = Path(config_path).resolve()
     with config_path.open("rb") as config_file:
         config = tomllib.load(config_file)
-
-    config_dir = config_path.parent
-
-    def configured_path(section, key):
-        path = Path(config[section][key])
-        return str(path if path.is_absolute() else config_dir / path)
 
     executables = config["executables"]
     grid = config["grid"]
@@ -40,7 +34,7 @@ def load_flow_config(config_path=None):
     # ===== PATHS =====
     exe_name_mf = executables["modflow"]
     exe_name_mt = executables["mt3dms"]
-    model_ws = folders["model_workspace"]
+    model_ws = str(Path.cwd().resolve() / "model")
     modelname_mf = folders["modelname_mf"]
     modelname_mt = folders["modelname_mt"]
 
