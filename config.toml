@@ -3,7 +3,6 @@ modflow = "/home/diego/modflow/modflow6/bin/mf6"
 mt3dms = "/home/diego/modflow/modflow6/bin/mf6"
 
 [folders]
-model_workspace = "test1"
 modelname_mf= "flow_model"
 modelname_mt = 'transport_model'
 figures = "figures"
@@ -20,7 +19,6 @@ nrow = 20
 ncol = 20
 delr = 10
 delc = 10
-
 
 [methods]
 conductivity = "avgK"
