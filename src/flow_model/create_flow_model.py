@@ -12,7 +12,7 @@ from .create_lmt_package import create_lmt_package
 from .create_lpf_package import create_lpf_package
 from .create_oc_package import create_oc_package
 from .create_pcg_package import create_pcg_package
-from .create_wel_package import create_wel_package
+from .create_wel_package import create_wel_package, setup_well_data
 
 
 def create_flow_model(modelname_mf, model_ws, param_dic):
@@ -94,6 +94,9 @@ def create_flow_model(modelname_mf, model_ws, param_dic):
     vka = param_dic["vka"]
     ss = param_dic["ss"]
     rech = param_dic["rech"]
+    well_location = param_dic["well_location"]
+    well_pumping_rate = param_dic["well_pumping_rate"]
+    well_layer = param_dic["well_layer"]
 
     # ---------- Optional parameters ----------
     ipakcb = param_dic.get("ipakcb", 53)
@@ -136,7 +139,7 @@ def create_flow_model(modelname_mf, model_ws, param_dic):
     # rch = flopy.modflow.ModflowRch(mf, rech=rech)
     
     # ===== WELL PACKAGE =====
-    wel_spd = param_dic.get("wel_spd", None)
+    wel_spd = setup_well_data(well_location, well_pumping_rate, well_layer)
     wel = create_wel_package(mf, wel_spd, ipakcb)
 
     # ===== OUTPUT CONTROL PACKAGE =====

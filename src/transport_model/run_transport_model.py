@@ -26,5 +26,10 @@ def run_transport_model(config_path, mf = None):
         param_dic=param_dic,
         kd=0.001, lambda1=0.0, isothm=0, ireact=0, igetsc=0
     )
-    print(f"Transport model creation completed. Success: {success_mt}")
     return mf,mt, success_mt, buff_mt
+
+
+if __name__ == "__main__":
+    config_path = "./test1/config.toml"
+    mf, mt, success_mt, buff_mt = run_transport_model(config_path)
+    print(f"Transport model creation completed. Success: {success_mt}")

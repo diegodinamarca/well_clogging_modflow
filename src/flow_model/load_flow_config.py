@@ -67,6 +67,9 @@ def load_flow_config(config_path=None):
     ibound[:, -1, :] = -1
 
     # ===== WELL INPUT ===== #
+    well_location = hydrology["well_location"]
+    well_pumping_rate = hydrology["well_pumping_rate"]
+    well_layer = hydrology["well_layer"]
 
     # ===== HYDRAULIC PARAMETERS =====
     hk, vka, ss, laytyp = create_hyd_params(grid, nlay, nrow, ncol, method=methods["conductivity"])
@@ -165,7 +168,9 @@ def load_flow_config(config_path=None):
         "hk": hk,
         "vka": vka,
         "ss": ss,
-
+        "well_location": well_location,
+        "well_pumping_rate": well_pumping_rate,
+        "well_layer": well_layer,
         # --- transport ---
         "prsity": prsity,
         

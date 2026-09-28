@@ -13,7 +13,6 @@ from transport_model.create_dsp_package import create_dsp_package
 from transport_model.create_gcg_package import create_gcg_package
 from transport_model.create_rct_package import create_rct_package
 from transport_model.create_ssm_package import create_ssm_package
-from transport_model.create_conc_array import create_conc_array
 
 def create_transport_model(modelname_mt, model_ws, mf, param_dic,
                            kd = 0.001, alpha = 1, lambda1 = 0.0, isothm = 0, ireact = 0, igetsc = 0):
