@@ -40,6 +40,12 @@ def create_mf6_simulation(param_dic, model_ws=None):
         sim_ws=str(workspace),
         verbosity_level=0,
     )
+
+    # Time discretization for the simulation
+    # The time discretization is set up for the simulation using the parameters provided in param_dic.
+    # The number of stress periods (nper), the lengths of each period (period_lengths),
+    #  and the number of time steps per period (steps_per_period) are all specified. 
+    # The steady-state or transient nature of each period is also defined using the steady_periods list.
     flopy.mf6.ModflowTdis(
         sim,
         time_units="DAYS",
@@ -52,6 +58,7 @@ def create_mf6_simulation(param_dic, model_ws=None):
 
     modelname_gwf = param_dic["modelname_mf"]
     modelname_gwt = param_dic["modelname_mt"]
+    # Create the GWF and GWT models within the simulation
     gwf = flopy.mf6.ModflowGwf(
         sim,
         modelname=modelname_gwf,
@@ -63,7 +70,9 @@ def create_mf6_simulation(param_dic, model_ws=None):
         save_flows=True,
     )
 
+    # Set up the grid and initial conditions for the GWF model
     idomain = (np.asarray(param_dic["ibound"]) != 0).astype(int)
+    # Set up the grid and initial conditions for the GWF model
     flopy.mf6.ModflowGwfdis(
         gwf,
         nlay=nlay,
@@ -75,7 +84,13 @@ def create_mf6_simulation(param_dic, model_ws=None):
         botm=param_dic["zbot"],
         idomain=idomain,
     )
+    # Interface for the MODFLOW 6 Initial Conditions (IC) package for a groundwater-flow (GWF) model.
+    # strt = initial starting head values for the GWF model, which are provided in the param_dic dictionary.
     flopy.mf6.ModflowGwfic(gwf, strt=param_dic["strt"])
+
+    # Interface for the MODFLOW 6 NPF (Non-Equilibrium Flow) package for a groundwater-flow (GWF) model.
+    # The NPF package is used to define the properties of the aquifer system, 
+    # including hydraulic conductivity and layer type (confined/unconfined).
     flopy.mf6.ModflowGwfnpf(
         gwf,
         icelltype=param_dic["laytyp"],
@@ -90,6 +105,10 @@ def create_mf6_simulation(param_dic, model_ws=None):
     specific_yield = param_dic.get("specific_yield")
     if transient and specific_yield is None and np.any(np.asarray(param_dic["laytyp"]) != 0):
         raise ValueError("Transient convertible layers require a configured specific_yield.")
+    # Interface for the MODFLOW 6 STO (Storage) package for a groundwater-flow (GWF) model.
+    # The STO package is used to define the storage properties of the aquifer system,
+    # including specific storage and specific yield. The specific_yield parameter is optional and is used
+    # for convertible layers (layers that can switch between confined and unconfined conditions).
     flopy.mf6.ModflowGwfsto(
         gwf,
         iconvert=param_dic["laytyp"],
@@ -98,7 +117,8 @@ def create_mf6_simulation(param_dic, model_ws=None):
         steady_state=steady_state or None,
         transient=transient or None,
     )
-
+    # Interface for the MODFLOW 6 CHD (Constant Head) package for a groundwater-flow (GWF) model.
+    # The CHD package is used to define constant head boundary conditions for the GWF model.
     fixed_head_cells = np.argwhere(np.asarray(param_dic["ibound"]) < 0)
     chd_data = [
         (
@@ -116,6 +136,8 @@ def create_mf6_simulation(param_dic, model_ws=None):
             stress_period_data={period: chd_data for period in range(nper)},
         )
 
+    # Interface for the MODFLOW 6 WEL (Well) package for a groundwater-flow (GWF) model.
+    # The WEL package is used to define well pumping conditions for the GWF model.
     well_data = {}
     well_locations = param_dic["well_location"]
     well_rates = param_dic["well_pumping_rate"]
@@ -141,7 +163,7 @@ def create_mf6_simulation(param_dic, model_ws=None):
             stress_period_data=well_data,
             save_flows=True,
         )
-
+    # Interface for the MODFLOW 6 RCHA (Recharge) package for a groundwater-flow (GWF) model.
     recharge = float(param_dic["recharge"])
     active_recharge = recharge != 0.0
     if active_recharge:
@@ -153,7 +175,9 @@ def create_mf6_simulation(param_dic, model_ws=None):
             aux=0.0,
             save_flows=True,
         )
-
+    # Interface for the MODFLOW 6 OC (Output Control) package for a groundwater-flow (GWF) model.
+    # The OC package is used to define the output options for the GWF model, including
+    # the frequency and type of output files generated during the simulation.
     flopy.mf6.ModflowGwfoc(
         gwf,
         head_filerecord=f"{modelname_gwf}.hds",
@@ -161,6 +185,7 @@ def create_mf6_simulation(param_dic, model_ws=None):
         saverecord=[("HEAD", "ALL"), ("BUDGET", "ALL")],
     )
 
+    # Set up the grid and initial conditions for the GWT model
     flopy.mf6.ModflowGwtdis(
         gwt,
         nlay=nlay,
@@ -172,8 +197,14 @@ def create_mf6_simulation(param_dic, model_ws=None):
         botm=param_dic["zbot"],
         idomain=idomain,
     )
+    # Interface for the MODFLOW 6 Initial Conditions (IC) package for a groundwater-flow transport (GWT) model.
+    # strt = initial starting concentration values for the GWT model
     flopy.mf6.ModflowGwtic(gwt, strt=param_dic["sconc"])
+
+    # Interface for the MODFLOW 6 ADV (Advection) package for a groundwater-flow transport (GWT) model.
     flopy.mf6.ModflowGwtadv(gwt, scheme=param_dic.get("advection_scheme", "TVD"))
+
+    # Interface for the MODFLOW 6 DSP (Dispersion) package for a groundwater-flow transport (GWT) model.
     al = float(param_dic["al"])
     flopy.mf6.ModflowGwtdsp(
         gwt,
@@ -183,6 +214,8 @@ def create_mf6_simulation(param_dic, model_ws=None):
         atv=al * float(param_dic["trpv"]),
     )
 
+    # Interface for the MODFLOW 6 MST (Mass Storage and Transfer) package for a groundwater-flow transport (GWT) model.
+    # The MST package is used to define the properties of the aquifer system related to mass storage and transfer, including porosity, sorption, bulk density, and distribution coefficient.
     mst_options = {
         "porosity": param_dic["prsity"],
         "sorption": "LINEAR",
@@ -194,6 +227,7 @@ def create_mf6_simulation(param_dic, model_ws=None):
         mst_options.update(first_order_decay=True, decay=decay)
     flopy.mf6.ModflowGwtmst(gwt, **mst_options)
 
+    # Interface for the MODFLOW 6 SSM (Source/Sink Mixing) package for a groundwater-flow transport (GWT) model.
     source_packages = []
     if chd_data:
         source_packages.append(("CHD", "AUX", "CONCENTRATION"))
@@ -207,6 +241,10 @@ def create_mf6_simulation(param_dic, model_ws=None):
             sources=source_packages,
         )
 
+    # Interface for the MODFLOW 6 CNC (Concentration) package for a groundwater-flow transport (GWT) model.
+    # The CNC package is used to define the concentration of contaminants injected into the GWT model
+    # at a specific source location for each stress period. The source location is specified by its
+    # layer, row, and column indices, which are calculated using the _cell_index function
     source_row = _cell_index(param_dic["source_row"], nrow, "source row")
     source_column = _cell_index(param_dic["source_col"], ncol, "source column")
     source_layer = _cell_index(param_dic.get("source_layer", 1), nlay, "source layer")
@@ -216,6 +254,10 @@ def create_mf6_simulation(param_dic, model_ws=None):
         for period, concentration in enumerate(source_active_periods)
     }
     flopy.mf6.ModflowGwtcnc(gwt, stress_period_data=cnc_data)
+
+    # Interface for the MODFLOW 6 FMI (Flow Model Interface) package for a groundwater-flow transport (GWT) model.
+    # The FMI package is used to couple the GWT model with the GWF model, 
+    #  allowing the GWT model to access flow information from the GWF model during the simulation.
     flopy.mf6.ModflowGwtfmi(
         gwt,
         packagedata=[
@@ -223,6 +265,10 @@ def create_mf6_simulation(param_dic, model_ws=None):
             ("GWFBUDGET", f"{modelname_gwf}.cbc"),
         ],
     )
+
+    # Interface for the MODFLOW 6 OBC (Output Control) package for a groundwater-flow transport (GWT) model.
+    # The OBC package is used to define the output options for the GWT model,
+    # including the frequency and type of output files generated during the simulation.
     flopy.mf6.ModflowGwtoc(
         gwt,
         concentration_filerecord=f"{modelname_gwt}.ucn",
@@ -230,11 +276,17 @@ def create_mf6_simulation(param_dic, model_ws=None):
         saverecord=[("CONCENTRATION", "ALL"), ("BUDGET", "ALL")],
     )
 
+    # Interface for the MODFLOW 6 GWF-GWT (Groundwater Flow - Groundwater Transport) coupling package.
+    # The GWF-GWT package is used to couple the GWF and GWT models
+    # within the MODFLOW 6 simulation, allowing the two models to exchange information during the simulation.
     flopy.mf6.ModflowGwfgwt(
         sim,
         exgmnamea=modelname_gwf,
         exgmnameb=modelname_gwt,
     )
+
+    # Interface for the MODFLOW 6 IMS (Iterative Model Solution) package for a MODFLOW 6 simulation.
+    # The IMS package is used to define the solver settings for the MODFLOW 6 simulation
     ims_gwf = flopy.mf6.ModflowIms(
         sim,
         filename="gwf.ims",
