@@ -19,6 +19,7 @@ def run_models(param_dic = None):
 
 
 if __name__ == "__main__":
-    config_path = Path(__file__).resolve().parent.parent / "test1" / "config.toml"
+    run_dir = Path.cwd().resolve()
+    config_path = run_dir / "config.toml"
     param_dic = load_flow_config(config_path=config_path)
     run_models(param_dic)

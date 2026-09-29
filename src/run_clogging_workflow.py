@@ -5,21 +5,58 @@
 
 from pathlib import Path
 
+import flopy
+import numpy as np
+import os
+
 from flow_model.load_flow_config import load_flow_config
-from run_modflow import run_modflow
+from flow_model.run_flow_model import run_flow_model
+from transport_model.run_transport_model import run_transport_model
 
 def calculate_porosity(deposited_mass):
     # Calculate new porosity based on deposited mass
     new_porosity = deposited_mass * 0.1  # Example: 10% of deposited mass
     return new_porosity
 
-def calculate_hydraulic_conductivity(porosity, method = "kozeny_carman"):
-    # Calculate new hydraulic conductivity based on updated porosity
-    if method == "kozeny_carman":
-        new_K = kozeny_carman(porosity)
-    else:
+def calculate_hydraulic_conductivity(
+    porosity, reference_porosity, reference_conductivity, method="kozeny_carman"
+):
+    if method != "kozeny_carman":
         raise ValueError("Unsupported method for calculating hydraulic conductivity.")
-    return new_K
+    if not 0 < reference_porosity < 1:
+        raise ValueError("Reference porosity must be between 0 and 1.")
+    if np.any(porosity <= 0) or np.any(porosity >= 1):
+        raise ValueError("Porosity values must be between 0 and 1.")
+    return reference_conductivity * (porosity / reference_porosity) ** 3 * (
+        (1 - reference_porosity) / (1 - porosity)
+    ) ** 2
+
+
+def run_modflow(param_dic):
+    mf, flow_success, buff = run_flow_model(param_dic)
+    print(f"Flow model completed. Success: {flow_success}")
+    if not flow_success:
+        failed_run_modflow(buff, source="flow")
+        return None, None, buff, None, flow_success, None
+    mf, mt, transport_success, buff_mt = run_transport_model(param_dic, mf=mf)
+    print(f"Transport model completed. Success: {transport_success}")
+    if not transport_success:
+        failed_run_modflow(buff_mt, source="transport")
+        return mf, mt, buff, buff_mt, flow_success, transport_success
+    return mf, mt, buff, buff_mt, flow_success, transport_success
+
+# If model failed write the buffer to a file for debugging add the source of the failure to the log
+# buff is a list of strings that contains the error messages from the model run. The source parameter indicates whether the failure occurred in the flow or transport model.
+def failed_run_modflow(buff, source = "flow"):
+    if source == "flow":
+        with open("flow_model_error.log", "w") as f:
+            # Write the buffer to the log file
+            f.write("\n".join(buff))
+    elif source == "transport":
+        with open("transport_model_error.log", "w") as f:
+            f.write("\n".join(buff))
+    else:
+        raise ValueError("Buffer source must be either 'flow' or 'transport'. Which model failed to run?")
 
 def calculate_deposition(tss):
     # Placeholder for deposition calculation logic
@@ -29,12 +66,41 @@ def calculate_deposition(tss):
 def initial_conditions(config_path):
     # Placeholder for initial conditions setup
     param_dic = load_flow_config(config_path = config_path)
-
     return param_dic
 
-def read_concentration_file():
+def read_concentration_file(model_ws):
     # Placeholder for reading concentration file logic
-    pass
+    ucnfile = os.path.join(model_ws, 'MT3D001.UCN')
+    ucnobj = flopy.utils.UcnFile(ucnfile)
+    conc = ucnobj.get_alldata()
+    return conc
+
+def get_concentration_at_time(model_ws, timestp):
+    ucnfile = os.path.join(model_ws, 'MT3D001.UCN')
+    ucnobj = flopy.utils.UcnFile(ucnfile)
+    times_mt = ucnobj.get_times()
+    conc = ucnobj.get_data(totim=times_mt[timestp])
+    return conc
+
+def get_concentration_times(model_ws):
+    ucnfile = os.path.join(model_ws, 'MT3D001.UCN')
+    ucnobj = flopy.utils.UcnFile(ucnfile)
+    # Get available times
+    times_mt = ucnobj.get_times()
+    return(times_mt)
+
+def get_last_concentration(model_ws):
+    ucnfile = os.path.join(model_ws, 'MT3D001.UCN')
+    ucnobj = flopy.utils.UcnFile(ucnfile)
+    # Get available times
+    times_mt = ucnobj.get_times()
+    last_time = times_mt[-1]
+    conc = ucnobj.get_data(totim=last_time)
+    return conc
+
+def update_concentration(param_dic, new_concentration):
+    param_dic["sconc"] = new_concentration
+    return param_dic
 
 def read_hyraulic_conductivity_file():
     # Placeholder for reading hydraulic conductivity file logic
@@ -65,18 +131,27 @@ def set_model_workspace(param_dic, timestep, base_workspace=None):
 
 
 def main():
-    config_path = Path(__file__).resolve().parent.parent / "test1" / "config.toml"
+    run_dir = Path.cwd().resolve()
+    config_path = run_dir / "config.toml"
     param_dic = initial_conditions(config_path)
     base_workspace = param_dic["model_ws"]
     simulation = range(3)
     for timestep, _ in enumerate(simulation):
         param_dic = set_model_workspace(param_dic, timestep, base_workspace)
-
-        # mf, mt, buff, buff_mt = run_modflow(param_dic)
-        # concentration = read_concentration_file()
+        mf, mt, buff, buff_mt, flow_success, transport_success = run_modflow(param_dic)
+        if not flow_success or not transport_success:
+            print(f"Model failed at timestep {timestep}. Check logs for details.")
+            break
+        concentration = get_last_concentration(param_dic["model_ws"])
+        print(f"Concentration at timestep {timestep}: {concentration}")
+        param_dic = update_concentration(param_dic, concentration)
+        # Here you can implement the logic to update parameters based on concentration
+        # For example:
         # deposited_mass = calculate_deposition(concentration)
         # porosity = calculate_porosity(deposited_mass)
-        # K = calculate_hydraulic_conductivity(porosity)
+        # K = calculate_hydraulic_conductivity(
+        #     porosity, param_dic["prsity"], param_dic["hk"]
+        # )
         # param_dic = update_parameters_list(param_dic, K, porosity, concentration)
 
 
