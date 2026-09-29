@@ -7,7 +7,7 @@ from pathlib import Path
 
 import flopy
 import numpy as np
-
+from utils import get_last_concentration
 from flow_model.load_flow_config import load_flow_config
 from flow_model.run_flow_model import run_flow_model
 from transport_model.run_transport_model import run_transport_model
@@ -32,17 +32,13 @@ def calculate_hydraulic_conductivity(
 
 
 def run_modflow(param_dic):
-    mf, flow_success, buff = run_flow_model(param_dic)
-    print(f"MODFLOW 6 simulation completed. Success: {flow_success}")
-    if not flow_success:
+    mf, success, buff = run_flow_model(param_dic)
+    print(f"MODFLOW 6 simulation completed. Success: {success}")
+    if not success:
         failed_run_modflow(buff, source="flow")
-        return mf, None, buff, None, flow_success, False
-    mf, mt, transport_success, buff_mt = run_transport_model(param_dic, mf=mf)
-    print(f"GWT model available. Success: {transport_success}")
-    if not transport_success:
-        failed_run_modflow(buff_mt, source="transport")
-        return mf, mt, buff, buff_mt, flow_success, transport_success
-    return mf, mt, buff, buff_mt, flow_success, transport_success
+        return mf, None, buff, None, success, False
+    mt = mf.get_model(param_dic["modelname_mt"])
+    return mf, mt, success
 
 # If model failed write the buffer to a file for debugging add the source of the failure to the log
 # buff is a list of strings that contains the error messages from the model run. The source parameter indicates whether the failure occurred in the flow or transport model.
@@ -66,35 +62,6 @@ def initial_conditions(config_path):
     # Placeholder for initial conditions setup
     param_dic = load_flow_config(config_path = config_path)
     return param_dic
-
-def read_concentration_file(model_ws, modelname_mt="transport_model"):
-    ucnfile = Path(model_ws) / f"{modelname_mt}.ucn"
-    ucnobj = flopy.utils.HeadFile(ucnfile, text="CONCENTRATION")
-    conc = ucnobj.get_alldata()
-    return conc
-
-def get_concentration_at_time(model_ws, timestp, modelname_mt="transport_model"):
-    ucnfile = Path(model_ws) / f"{modelname_mt}.ucn"
-    ucnobj = flopy.utils.HeadFile(ucnfile, text="CONCENTRATION")
-    times_mt = ucnobj.get_times()
-    conc = ucnobj.get_data(totim=times_mt[timestp])
-    return conc
-
-def get_concentration_times(model_ws, modelname_mt="transport_model"):
-    ucnfile = Path(model_ws) / f"{modelname_mt}.ucn"
-    ucnobj = flopy.utils.HeadFile(ucnfile, text="CONCENTRATION")
-    # Get available times
-    times_mt = ucnobj.get_times()
-    return(times_mt)
-
-def get_last_concentration(model_ws, modelname_mt="transport_model"):
-    ucnfile = Path(model_ws) / f"{modelname_mt}.ucn"
-    ucnobj = flopy.utils.HeadFile(ucnfile, text="CONCENTRATION")
-    # Get available times
-    times_mt = ucnobj.get_times()
-    last_time = times_mt[-1]
-    conc = ucnobj.get_data(totim=last_time)
-    return conc
 
 def update_concentration(param_dic, new_concentration):
     param_dic["sconc"] = new_concentration
@@ -136,14 +103,14 @@ def main():
     simulation = range(3)
     for timestep, _ in enumerate(simulation):
         param_dic = set_model_workspace(param_dic, timestep, base_workspace)
-        mf, mt, buff, buff_mt, flow_success, transport_success = run_modflow(param_dic)
-        if not flow_success or not transport_success:
+        mf, mt, success = run_modflow(param_dic)
+        if not success:
             print(f"Model failed at timestep {timestep}. Check logs for details.")
             break
         concentration = get_last_concentration(
             param_dic["model_ws"], param_dic["modelname_mt"]
         )
-        print(f"Concentration at timestep {timestep}: {concentration}")
+        #print(f"Concentration at timestep {timestep}: {concentration}")
         param_dic = update_concentration(param_dic, concentration)
         # Here you can implement the logic to update parameters based on concentration
         # For example:
