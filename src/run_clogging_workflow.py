@@ -7,7 +7,6 @@ from pathlib import Path
 
 import flopy
 import numpy as np
-import os
 
 from flow_model.load_flow_config import load_flow_config
 from flow_model.run_flow_model import run_flow_model
@@ -34,12 +33,12 @@ def calculate_hydraulic_conductivity(
 
 def run_modflow(param_dic):
     mf, flow_success, buff = run_flow_model(param_dic)
-    print(f"Flow model completed. Success: {flow_success}")
+    print(f"MODFLOW 6 simulation completed. Success: {flow_success}")
     if not flow_success:
         failed_run_modflow(buff, source="flow")
-        return None, None, buff, None, flow_success, None
+        return mf, None, buff, None, flow_success, False
     mf, mt, transport_success, buff_mt = run_transport_model(param_dic, mf=mf)
-    print(f"Transport model completed. Success: {transport_success}")
+    print(f"GWT model available. Success: {transport_success}")
     if not transport_success:
         failed_run_modflow(buff_mt, source="transport")
         return mf, mt, buff, buff_mt, flow_success, transport_success
@@ -68,30 +67,29 @@ def initial_conditions(config_path):
     param_dic = load_flow_config(config_path = config_path)
     return param_dic
 
-def read_concentration_file(model_ws):
-    # Placeholder for reading concentration file logic
-    ucnfile = os.path.join(model_ws, 'MT3D001.UCN')
-    ucnobj = flopy.utils.UcnFile(ucnfile)
+def read_concentration_file(model_ws, modelname_mt="transport_model"):
+    ucnfile = Path(model_ws) / f"{modelname_mt}.ucn"
+    ucnobj = flopy.utils.HeadFile(ucnfile, text="CONCENTRATION")
     conc = ucnobj.get_alldata()
     return conc
 
-def get_concentration_at_time(model_ws, timestp):
-    ucnfile = os.path.join(model_ws, 'MT3D001.UCN')
-    ucnobj = flopy.utils.UcnFile(ucnfile)
+def get_concentration_at_time(model_ws, timestp, modelname_mt="transport_model"):
+    ucnfile = Path(model_ws) / f"{modelname_mt}.ucn"
+    ucnobj = flopy.utils.HeadFile(ucnfile, text="CONCENTRATION")
     times_mt = ucnobj.get_times()
     conc = ucnobj.get_data(totim=times_mt[timestp])
     return conc
 
-def get_concentration_times(model_ws):
-    ucnfile = os.path.join(model_ws, 'MT3D001.UCN')
-    ucnobj = flopy.utils.UcnFile(ucnfile)
+def get_concentration_times(model_ws, modelname_mt="transport_model"):
+    ucnfile = Path(model_ws) / f"{modelname_mt}.ucn"
+    ucnobj = flopy.utils.HeadFile(ucnfile, text="CONCENTRATION")
     # Get available times
     times_mt = ucnobj.get_times()
     return(times_mt)
 
-def get_last_concentration(model_ws):
-    ucnfile = os.path.join(model_ws, 'MT3D001.UCN')
-    ucnobj = flopy.utils.UcnFile(ucnfile)
+def get_last_concentration(model_ws, modelname_mt="transport_model"):
+    ucnfile = Path(model_ws) / f"{modelname_mt}.ucn"
+    ucnobj = flopy.utils.HeadFile(ucnfile, text="CONCENTRATION")
     # Get available times
     times_mt = ucnobj.get_times()
     last_time = times_mt[-1]
@@ -142,7 +140,9 @@ def main():
         if not flow_success or not transport_success:
             print(f"Model failed at timestep {timestep}. Check logs for details.")
             break
-        concentration = get_last_concentration(param_dic["model_ws"])
+        concentration = get_last_concentration(
+            param_dic["model_ws"], param_dic["modelname_mt"]
+        )
         print(f"Concentration at timestep {timestep}: {concentration}")
         param_dic = update_concentration(param_dic, concentration)
         # Here you can implement the logic to update parameters based on concentration

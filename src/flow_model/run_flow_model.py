@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from .load_flow_config import load_flow_config
 from .create_flow_model import create_flow_model
 
@@ -14,8 +16,8 @@ def run_flow_model(param_dic = None):
     return mf, success, buff
 
 if __name__ == "__main__":
-    config_path = "./test1/config.toml"
-    param_dic = load_flow_config(config_path = config_path)
+    config_path = Path.cwd() / "config.toml"
+    param_dic = load_flow_config(config_path=config_path)
     print("Config loaded successfully")
     mf, success, buff = run_flow_model(param_dic)
     print(f"Flow model creation completed. Success: {success}")

@@ -1,9 +1,8 @@
 [executables]
 modflow = "/home/diego/modflow/modflow6/bin/mf6"
-mt3dms = "C:/Simcore/PM8/mt3dms/mt3dms5b"
+mt3dms = "/home/diego/modflow/modflow6/bin/mf6"
 
 [folders]
-model_workspace = "test1/model"
 modelname_mf= "flow_model"
 modelname_mt = 'transport_model'
 figures = "figures"
@@ -37,7 +36,9 @@ steady_mf = [true, true]
 recharge = 0.0025
 recharge_infiltration_factor = 0.3
 sand_lens_percentage = 0.1
-pump_rate = 50
+well_location = [[10,10]]
+well_pumping_rate = [5]
+well_layer = [[1,2]]
 
 [transport]
 porosity = 0.3
@@ -47,10 +48,10 @@ vertical_transverse_dispersivity = 0.3
 ncomp = 1
 initial_concentration = 0.0
 initial_sorbed_concentration = 1.0
-observation_row = 25
-observation_column = 28
-source_row = 25
-source_column = 28
+observation_row = 10
+observation_column = 10
+source_row = 10
+source_column = 10
 bulk_density = 2000.0
 distribution_coefficient = 0.000045
 decay_rate = 0.0

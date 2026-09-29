@@ -1,37 +1,29 @@
 from flow_model.load_flow_config import load_flow_config
-from transport_model.create_transport_model import create_transport_model
+from flow_model.run_flow_model import run_flow_model
 
-def run_transport_model(param_dic = None, mf = None):
-    """Run the transport model using the provided configuration."""
+
+def run_transport_model(param_dic=None, mf=None):
+    """Return the GWT model from a coupled MODFLOW 6 simulation.
+
+    When no simulation is supplied, both GWF and GWT are built and run because
+    MODFLOW 6 solves the coupled models together.
+    """
     if param_dic is None:
         raise ValueError("param_dic must be provided to run the transport model.")
-    # read model_ws, modelname_mf, modelname_mt from param_dic
-    model_ws = param_dic.get("model_ws")
-    modelname_mf = param_dic.get("modelname_mf")
-    modelname_mt = param_dic.get("modelname_mt")
 
-    #if mf is None run flow model first
     if mf is None:
-        from flow_model.run_flow_model import run_flow_model
-        mf, success, buff = run_flow_model(config_path)
+        mf, success, buff = run_flow_model(param_dic)
         if not success:
-            print("Flow model failed to run. Cannot proceed with transport model.")
-            return None, False, None
-    
-    print("Running Transport model...")
-    mt, success_mt, buff_mt = create_transport_model(
-        modelname_mt=modelname_mt,
-        model_ws=model_ws,
-        mf=mf,
-        param_dic=param_dic,
-        kd=0.001, lambda1=0.0, isothm=0, ireact=0, igetsc=0
-    )
-    return mf,mt, success_mt, buff_mt
+            return mf, None, success, buff
+    else:
+        success, buff = True, []
+
+    gwt = mf.get_model(param_dic["modelname_mt"])
+    return mf, gwt, success, buff
 
 
 if __name__ == "__main__":
-    config_path = "./test1/config.toml"
-    param_dic = load_flow_config(config_path = config_path)
-    print("Config loaded successfully")
-    mf, mt, success_mt, buff_mt = run_transport_model(param_dic)
-    print(f"Transport model creation completed. Success: {success_mt}")
+    config_path = "./config.toml"
+    param_dic = load_flow_config(config_path=config_path)
+    simulation, gwt, success, output = run_transport_model(param_dic)
+    print(f"Coupled MODFLOW 6 simulation completed. Success: {success}")

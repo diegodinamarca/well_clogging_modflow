@@ -5,7 +5,6 @@ Created on Thu Apr 23 11:05:39 2026
 @author: rappe
 """
 
-import os
 import tomllib
 from pathlib import Path
 
@@ -17,7 +16,7 @@ from .create_hyd_params import create_hyd_params
 def load_flow_config(config_path=None):
     """Load model inputs from TOML and build the derived flow configuration."""
     if config_path is None:
-        config_path = Path(__file__).resolve().parent.parent / "config.toml"
+        config_path = Path(__file__).resolve().parents[2] / "config.toml"
     config_path = Path(config_path).resolve()
     with config_path.open("rb") as config_file:
         config = tomllib.load(config_file)
@@ -33,8 +32,7 @@ def load_flow_config(config_path=None):
 
     # ===== PATHS =====
     exe_name_mf = executables["modflow"]
-    exe_name_mt = executables["mt3dms"]
-    model_ws = str(Path.cwd().resolve() / "model")
+    model_ws = str(config_path.parent / "model")
     modelname_mf = folders["modelname_mf"]
     modelname_mt = folders["modelname_mt"]
 
@@ -68,10 +66,11 @@ def load_flow_config(config_path=None):
     # ===== HYDRAULIC PARAMETERS =====
     hk, vka, ss, laytyp = create_hyd_params(grid, nlay, nrow, ncol, method=methods["conductivity"])
 
-    # ===== TRANSPORT PARAMS (MT3DMS) =====
+    # ===== TRANSPORT PARAMETERS =====
     prsity = transport["porosity"]
     # ===== RECHARGE ====== #
     rech = hydrology["recharge_infiltration_factor"]
+    recharge = hydrology["recharge"]
 
     # ===== TIME DISCRETIZATION =====
     nper_mf = time["nper_mf"]
@@ -95,8 +94,7 @@ def load_flow_config(config_path=None):
     
 
     # periods for injection of contaminants (not used)
-    active_periods = [c0, 0.0]
-    # active_periods = [c0]*100+[0.0]*100
+    active_periods = [c0] + [0.0] * (nper_mt - 1)
 
     # ===== ARRAYS =====
     icbund = np.ones((nlay, nrow, ncol), dtype=np.int32)
@@ -126,8 +124,6 @@ def load_flow_config(config_path=None):
 
         # --- executables ---
         "exe_name_mf": exe_name_mf,
-        "exe_name_mt": exe_name_mt,
-
         # --- folders ---
         "model_ws": model_ws,
         "modelname_mf": modelname_mf,
@@ -170,6 +166,7 @@ def load_flow_config(config_path=None):
         
         # --- recharge ---
         "rech" : rech,
+        "recharge": recharge,
 
         # --- optional ---
         "ipakcb": runtime["ipakcb"],
@@ -195,6 +192,7 @@ def load_flow_config(config_path=None):
         "c0": c0,
         "source_row": source_row,
         "source_col": source_col,
+        "source_layer": transport.get("source_layer", 1),
 
         # --- observation ---
         "obs_row": obs_row,
