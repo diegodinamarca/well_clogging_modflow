@@ -100,12 +100,15 @@ def main():
     config_path = run_dir / "config.toml"
     param_dic = initial_conditions(config_path)
     base_workspace = param_dic["model_ws"]
+
+    # Number of iterations for each simulation. Each simulations runs for every timestep defined in the config.file
     simulation = range(3)
-    for timestep, _ in enumerate(simulation):
-        param_dic = set_model_workspace(param_dic, timestep, base_workspace)
+
+    for iter, _ in enumerate(simulation):
+        param_dic = set_model_workspace(param_dic, iter, base_workspace)
         mf, mt, success = run_modflow(param_dic)
         if not success:
-            print(f"Model failed at timestep {timestep}. Check logs for details.")
+            print(f"Model failed at iteration {iter}. Check logs for details.")
             break
         concentration = get_last_concentration(
             param_dic["model_ws"], param_dic["modelname_mt"]
@@ -114,12 +117,12 @@ def main():
         param_dic = update_concentration(param_dic, concentration)
         # Here you can implement the logic to update parameters based on concentration
         # For example:
-        # deposited_mass = calculate_deposition(concentration)
-        # porosity = calculate_porosity(deposited_mass)
-        # K = calculate_hydraulic_conductivity(
-        #     porosity, param_dic["prsity"], param_dic["hk"]
-        # )
-        # param_dic = update_parameters_list(param_dic, K, porosity, concentration)
+        deposited_mass = calculate_deposition(concentration)
+        porosity = calculate_porosity(deposited_mass)
+        K = calculate_hydraulic_conductivity(
+             porosity, param_dic["prsity"], param_dic["hk"]
+        )
+        param_dic = update_parameters_list(param_dic, K, porosity, concentration)
 
 
 if __name__ == "__main__":

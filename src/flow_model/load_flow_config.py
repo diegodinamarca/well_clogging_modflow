@@ -32,7 +32,7 @@ def load_flow_config(config_path=None):
 
     # ===== PATHS =====
     exe_name_mf = executables["modflow"]
-    model_ws = str(config_path.parent / "model")
+    model_ws = str(config_path.parent / "simulations")
     modelname_mf = folders["modelname_mf"]
     modelname_mt = folders["modelname_mt"]
 
@@ -55,8 +55,8 @@ def load_flow_config(config_path=None):
     ibound = np.ones((nlay, nrow, ncol), dtype=np.int32)
     ibound[:, :, 0] = -1
     ibound[:, :, -1] = -1
-    ibound[:, 0, :] = -1
-    ibound[:, -1, :] = -1
+    ibound[:, 0, :] = 1
+    ibound[:, -1, :] = 1
 
     # ===== WELL INPUT ===== #
     well_location = hydrology["well_location"]
