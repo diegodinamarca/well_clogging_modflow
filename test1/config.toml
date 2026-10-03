@@ -23,18 +23,16 @@ delc = 10
 conductivity = "avgK"
 
 [time]
-nper_mf = 2
-nper_mt = 2
-perlen_mf = [3650, 14600]
-perlen_mt = [3650, 14600]
-nstp_mf = [200, 100]
-nstp_mt = [200, 100]
-steady_mf = [true, true]
+nper_mf = 1
+nper_mt = 1
+perlen_mf = [365]
+perlen_mt = [365]
+nstp_mf = [100]
+nstp_mt = [100]
+steady_mf = [true]
 
 [hydrology]
-recharge = 0.0025
-recharge_infiltration_factor = 0.3
-sand_lens_percentage = 0.1
+recharge = 0
 well_location = [[10,10]]
 well_pumping_rate = [-20]
 well_layer = [[1,2]]
@@ -46,7 +44,9 @@ horizontal_transverse_dispersivity = 0.3
 vertical_transverse_dispersivity = 0.3
 ncomp = 1
 initial_concentration = 10.0
-initial_sorbed_concentration = 1.0
+initial_aquifer_concentration = 10
+initial_source_concentration = 5
+source_active_periods = [1] # list length must match nper_mt and nper_mf
 observation_row = 10
 observation_column = 10
 source_row = 10
