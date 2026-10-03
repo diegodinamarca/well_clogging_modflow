@@ -2,7 +2,7 @@
 
 Usage from the project workspace::
 
-    python src/plot_results.py 3 --ws test1/model
+    python src/plot_results.py 3 --ws test1
 
 The positional argument is the number of timestep folders to process. The
 optional ``--ws`` argument points to the folder containing ``timestep_0``,
@@ -10,6 +10,7 @@ optional ``--ws`` argument points to the folder containing ``timestep_0``,
 """
 
 from plot_conc_utils import plot_first_concentration, plot_last_concentration
+from plot_flow_properties import plot_flow_properties
 from plot_head_utils import plot_first_head, plot_last_head
 import argparse
 
@@ -41,6 +42,7 @@ def main():
         print(folder)
         plot_first_and_last_concentration(folder)
         plot_first_and_last_head(folder)
+        plot_flow_properties(folder, layer=0)
 
 if __name__ == "__main__":
     main()

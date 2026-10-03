@@ -90,7 +90,7 @@ def update_parameters_list(param_list, new_K, porosity, concentration):
 
 def set_model_workspace(param_dic, timestep, base_workspace=None):
     base_workspace = Path(base_workspace or param_dic["model_ws"])
-    param_dic["model_ws"] = str(base_workspace / f"timestep_{timestep}")
+    param_dic["model_ws"] = str(base_workspace / f"sim_{timestep}")
     print ("Model workspace set to:", param_dic["model_ws"]) 
     return param_dic
 
