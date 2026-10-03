@@ -18,6 +18,8 @@ nrow = 20
 ncol = 20
 delr = 10
 delc = 10
+well_refinement_factor = 2
+well_refinement_radius = 10 # Same length units as delr and delc
 
 [methods]
 conductivity = "avgK"
