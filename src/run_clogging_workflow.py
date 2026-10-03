@@ -12,9 +12,9 @@ from flow_model.load_flow_config import load_flow_config
 from flow_model.run_flow_model import run_flow_model
 from transport_model.run_transport_model import run_transport_model
 
-def calculate_porosity(deposited_mass):
+def calculate_porosity(porosity, deposited_mass):
     # Calculate new porosity based on deposited mass
-    new_porosity = deposited_mass * 0.1  # Example: 10% of deposited mass
+    new_porosity = porosity -porosity * np.mean(deposited_mass)  # Example: 10% of deposited mass
     return new_porosity
 
 def calculate_hydraulic_conductivity(
@@ -53,9 +53,9 @@ def failed_run_modflow(buff, source = "flow"):
     else:
         raise ValueError("Buffer source must be either 'flow' or 'transport'. Which model failed to run?")
 
-def calculate_deposition(tss):
+def calculate_deposition(concentration):
     # Placeholder for deposition calculation logic
-    deposited_mass = tss.sum()  # Example: sum of TSS values
+    deposited_mass = concentration * 0.1  # Example: 10% of concentration
     return deposited_mass
 
 def initial_conditions(config_path):
@@ -77,7 +77,7 @@ def read_porosity_file():
 
 def calculate_deposition(concentration):
     # Placeholder for calculating deposition logic
-    deposited_mass = concentration * 0.1  # Example: 10% of concentration
+    deposited_mass = concentration * 0.01  # Example: 10% of concentration
     return deposited_mass
 
 def update_parameters_list(param_list, new_K, porosity, concentration):
@@ -105,6 +105,7 @@ def main():
     simulation = range(3)
 
     for iter, _ in enumerate(simulation):
+        
         param_dic = set_model_workspace(param_dic, iter, base_workspace)
         mf, mt, success = run_modflow(param_dic)
         if not success:
@@ -113,14 +114,24 @@ def main():
         concentration = get_last_concentration(
             param_dic["model_ws"], param_dic["modelname_mt"]
         )
+        mean_k = np.mean(param_dic["hk"])
+
+        print (f"##################### Iteration {iter} Summary ################")
+        print(f"Porosity at iteration {iter}: {round(param_dic['porosity'], 2)}")
+        print(f"Mean hydraulic conductivity at iteration {iter}: {round(mean_k, 2)}")
+        print(f"Mean concentration at iteration {iter}: {round(np.mean(concentration), 2)}")
+        print (f"#####################################################################")
+
         #print(f"Concentration at timestep {timestep}: {concentration}")
         param_dic = update_concentration(param_dic, concentration)
         # Here you can implement the logic to update parameters based on concentration
         # For example:
         deposited_mass = calculate_deposition(concentration)
-        porosity = calculate_porosity(deposited_mass)
+
+
+        porosity = calculate_porosity(param_dic["porosity"], deposited_mass)
         K = calculate_hydraulic_conductivity(
-             porosity, param_dic["prsity"], param_dic["hk"]
+             porosity, param_dic["porosity"], param_dic["hk"]
         )
         param_dic = update_parameters_list(param_dic, K, porosity, concentration)
 

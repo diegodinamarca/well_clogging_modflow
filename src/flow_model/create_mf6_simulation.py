@@ -175,6 +175,8 @@ def create_mf6_simulation(param_dic, model_ws=None):
             aux=0.0,
             save_flows=True,
         )
+
+    
     # Interface for the MODFLOW 6 OC (Output Control) package for a groundwater-flow (GWF) model.
     # The OC package is used to define the output options for the GWF model, including
     # the frequency and type of output files generated during the simulation.
@@ -217,7 +219,7 @@ def create_mf6_simulation(param_dic, model_ws=None):
     # Interface for the MODFLOW 6 MST (Mass Storage and Transfer) package for a groundwater-flow transport (GWT) model.
     # The MST package is used to define the properties of the aquifer system related to mass storage and transfer, including porosity, sorption, bulk density, and distribution coefficient.
     mst_options = {
-        "porosity": param_dic["prsity"],
+        "porosity": param_dic["porosity"],
         "sorption": "LINEAR",
         "bulk_density": param_dic["rhob"],
         "distcoef": param_dic["kd"],
@@ -245,15 +247,16 @@ def create_mf6_simulation(param_dic, model_ws=None):
     # The CNC package is used to define the concentration of contaminants injected into the GWT model
     # at a specific source location for each stress period. The source location is specified by its
     # layer, row, and column indices, which are calculated using the _cell_index function
-    source_row = _cell_index(param_dic["source_row"], nrow, "source row")
-    source_column = _cell_index(param_dic["source_col"], ncol, "source column")
-    source_layer = _cell_index(param_dic.get("source_layer", 1), nlay, "source layer")
-    source_cell = (source_layer, source_row, source_column)
-    cnc_data = {
-        period: [(source_cell, float(concentration))]
-        for period, concentration in enumerate(source_active_periods)
-    }
-    flopy.mf6.ModflowGwtcnc(gwt, stress_period_data=cnc_data)
+    # source_row = _cell_index(param_dic["source_row"], nrow, "source row")
+    # source_column = _cell_index(param_dic["source_col"], ncol, "source column")
+    # source_layer = _cell_index(param_dic.get("source_layer", 1), nlay, "source layer")
+    # source_cell = (source_layer, source_row, source_column)
+    # source_concentration = param_dic["c0"]
+    # cnc_data = {
+    #     period: [(source_cell, float(source_concentration))]
+    #     for period in enumerate(source_active_periods)
+    # }
+    # flopy.mf6.ModflowGwtcnc(gwt, stress_period_data=cnc_data)
 
     # Interface for the MODFLOW 6 FMI (Flow Model Interface) package for a groundwater-flow transport (GWT) model.
     # The FMI package is used to couple the GWT model with the GWF model, 

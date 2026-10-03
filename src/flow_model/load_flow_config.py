@@ -89,19 +89,30 @@ def load_flow_config(config_path=None):
 
     # ===== CONCENTRATION =====
     ncomp = transport["ncomp"]
-    c0 = transport["initial_concentration"]
-    sconc = transport["initial_sorbed_concentration"]
-    
+    gw_c0 = transport["initial_aquifer_concentration"]
+    c0 = transport["initial_source_concentration"]
+    active_periods = transport["source_active_periods"]  # List of active
 
-    # periods for injection of contaminants (not used)
-    active_periods = [c0] + [0.0] * (nper_mt - 1)
 
     # ===== ARRAYS =====
     icbund = np.ones((nlay, nrow, ncol), dtype=np.int32)
     sconc = np.zeros((nlay, nrow, ncol), dtype=np.float32)
     
     # load initial concentrations to array
-    sconc[:, :, :] = c0  # Set all cells to the specified concentration value
+    if isinstance(gw_c0, (int, float)):
+        sconc[:, :, :] = gw_c0  # Set all cells to the specified concentration value
+    elif isinstance(gw_c0, (list)):
+        if len(gw_c0) != nlay:
+            raise ValueError("Length of initial aquifer concentration list must match the number of layers (nlay).")
+        for layer in range(nlay):
+            # initial concentration array structure is [layer, row, col]
+            sconc[layer, :, :] = gw_c0[layer]  # Set each layer to the specified concentration value
+    elif isinstance(gw_c0, np.ndarray):
+        if gw_c0.shape != (nlay, nrow, ncol):
+            raise ValueError("Shape of initial aquifer concentration array must match (nlay, nrow, ncol).")
+        sconc = gw_c0.astype(np.float32)  # Use the provided array directly
+    else:
+        raise TypeError("initial aquifer concentration must be an int, float, list, or numpy.ndarray. Check config file.")
 
     # ===== OBSERVATION POINT =====
     obs_row = transport["observation_row"]
@@ -162,7 +173,7 @@ def load_flow_config(config_path=None):
         "well_pumping_rate": well_pumping_rate,
         "well_layer": well_layer,
         # --- transport ---
-        "prsity": prsity,
+        "porosity": prsity,
         
         # --- recharge ---
         "rech" : rech,
@@ -193,6 +204,7 @@ def load_flow_config(config_path=None):
         "source_row": source_row,
         "source_col": source_col,
         "source_layer": transport.get("source_layer", 1),
+        "source_active_periods": active_periods,
 
         # --- observation ---
         "obs_row": obs_row,
@@ -210,10 +222,7 @@ def load_flow_config(config_path=None):
         "ncomp": ncomp,
         "mixelm": transport.get("mixelm", 0),
         "percel": transport.get("percel", 0.75),
-        "source_itype": transport.get("source_itype", 1),
-
-        # source active first period only (default behavior)
-        "source_active_periods": active_periods
+        "source_itype": transport.get("source_itype", 1),        
 
     }
 
