@@ -68,8 +68,8 @@ def load_flow_config(config_path=None):
 
     # ===== TRANSPORT PARAMETERS =====
     prsity = transport["porosity"]
+    
     # ===== RECHARGE ====== #
-    rech = hydrology["recharge_infiltration_factor"]
     recharge = hydrology["recharge"]
 
     # ===== TIME DISCRETIZATION =====
@@ -176,7 +176,6 @@ def load_flow_config(config_path=None):
         "porosity": prsity,
         
         # --- recharge ---
-        "rech" : rech,
         "recharge": recharge,
 
         # --- optional ---
