@@ -42,10 +42,13 @@ def _create_refined_grid(nrow, ncol, delr, delc, well_locations, factor, radius)
 
     row_counts = np.where(refine_rows, factor, 1)
     column_counts = np.where(refine_columns, factor, 1)
+
     row_parent = np.repeat(np.arange(nrow), row_counts)
     column_parent = np.repeat(np.arange(ncol), column_counts)
+
     row_starts = np.cumsum(np.r_[0, row_counts[:-1]])
     column_starts = np.cumsum(np.r_[0, column_counts[:-1]])
+    
     row_index_map = row_starts + (row_counts - 1) // 2
     column_index_map = column_starts + (column_counts - 1) // 2
 
