@@ -92,6 +92,7 @@ def load_flow_config(config_path=None):
     runtime = config["runtime"]
     folders = config["folders"]
     methods = config["methods"]
+    methods_parameters = config["methods_parameters"]
 
     # ===== PATHS =====
     exe_name_mf = executables["modflow"]
@@ -255,11 +256,17 @@ def load_flow_config(config_path=None):
 
         # --- executables ---
         "exe_name_mf": exe_name_mf,
+
         # --- folders ---
         "model_ws": model_ws,
         "modelname_mf": modelname_mf,
         "modelname_mt": modelname_mt,
-        # --- input files ---
+
+        # --- methods ---
+        "k_update_method": methods["k_update_method"],
+
+        # --- methods parameters ---
+        "lambdak": methods_parameters["lambdak"],
 
         # --- grid ---
         "nlay": nlay,
@@ -269,10 +276,13 @@ def load_flow_config(config_path=None):
         "zbot": zbot,
         "delr": delr,
         "delc": delc,
+
+        # --- well ---
         "well_refinement_factor": refinement_factor,
         "well_refinement_radius": refinement_radius,
-        # --- well ---
-        # "wel_spd": wel_spd,
+        "well_location": well_location,
+        "well_pumping_rate": well_pumping_rate,
+        "well_layer": well_layer,
 
         # --- time ---
         "nper_mf": nper_mf,
@@ -286,14 +296,13 @@ def load_flow_config(config_path=None):
         # --- boundary & initial ---
         "ibound": ibound,
         "strt": strt,
+
         # --- hydraulic ---
         "laytyp": laytyp,
         "hk": hk,
         "vka": vka,
         "ss": ss,
-        "well_location": well_location,
-        "well_pumping_rate": well_pumping_rate,
-        "well_layer": well_layer,
+
         # --- transport ---
         "porosity": prsity,
         
@@ -306,10 +315,6 @@ def load_flow_config(config_path=None):
         "compact_oc": runtime["compact_oc"],
         "silent": runtime["silent"],
         "report": runtime["report"],
-
-        # # --- metadata (no usado directamente por flopy pero útil) ---
-        # "Lx": Lx,
-        # "Ly": Ly,
 
         # --- basic transport ---
         "icbund": icbund,

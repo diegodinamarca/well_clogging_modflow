@@ -72,6 +72,12 @@ def main():
                 y=well_row - 1,
                 layer=well_layer - 1,
             )
+            plot_breakthrough_curve(
+                            Path(model_ws) / "simulations",
+                            x=well_column - 3,
+                            y=well_row - 1,
+                            layer=well_layer - 1,
+                        )
             plot_head_curve(
                 Path(model_ws) / "simulations",
                 x=well_column - 1,
