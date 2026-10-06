@@ -14,21 +14,26 @@ from transport_model.run_transport_model import run_transport_model
 
 def calculate_porosity(porosity, deposited_mass):
     # Calculate new porosity based on deposited mass
-    new_porosity = porosity -porosity * np.mean(deposited_mass)  # Example: 10% of deposited mass
+    new_porosity = porosity - porosity * np.mean(deposited_mass)  # Example: 10% of deposited mass
     return new_porosity
 
 def calculate_hydraulic_conductivity(
-    porosity, reference_porosity, reference_conductivity, method="kozeny_carman"
+    porosity, reference_porosity, reference_conductivity, method="kozeny_carman", time = None, lamb = None
 ):
-    if method != "kozeny_carman":
+    if not method in ["kozeny_carman", "exp_decay"]:
         raise ValueError("Unsupported method for calculating hydraulic conductivity.")
     if not 0 < reference_porosity < 1:
         raise ValueError("Reference porosity must be between 0 and 1.")
     if np.any(porosity <= 0) or np.any(porosity >= 1):
         raise ValueError("Porosity values must be between 0 and 1.")
-    return reference_conductivity * (porosity / reference_porosity) ** 3 * (
-        (1 - reference_porosity) / (1 - porosity)
-    ) ** 2
+    if method == "kozeny_carman":
+        return reference_conductivity * (porosity / reference_porosity) ** 3 * (
+            (1 - reference_porosity) / (1 - porosity)
+        ) ** 2
+    if method == "exp_decay":
+        if time is None or lamb is None:
+            raise ValueError("Time and lambda must be provided for exponential decay method.")
+        return reference_conductivity * np.exp(-lamb * time)
 
 
 def run_modflow(param_dic):
@@ -78,6 +83,7 @@ def read_porosity_file():
 def calculate_deposition(concentration):
     # Placeholder for calculating deposition logic
     deposited_mass = concentration * 0.01  # Example: 10% of concentration
+
     return deposited_mass
 
 def update_parameters_list(param_list, new_K, porosity, concentration):
@@ -100,7 +106,7 @@ def main():
     config_path = run_dir / "config.toml"
     param_dic = initial_conditions(config_path)
     base_workspace = param_dic["model_ws"]
-
+    k_update_method = param_dic.get("k_update_method", "exp_decay")
     # Number of iterations for each simulation. Each simulations runs for every timestep defined in the config.file
     simulation = range(3)
 
@@ -127,11 +133,11 @@ def main():
         # Here you can implement the logic to update parameters based on concentration
         # For example:
         deposited_mass = calculate_deposition(concentration)
-
-
+        
+        time = param_dic["perlen_mf"] * (iter + 1)  # Assuming each iteration corresponds to one period length
         porosity = calculate_porosity(param_dic["porosity"], deposited_mass)
         K = calculate_hydraulic_conductivity(
-             porosity, param_dic["porosity"], param_dic["hk"]
+             porosity, param_dic["porosity"], param_dic["hk"], method=k_update_method, time=iter, lamb=param_dic["lambdak"]
         )
         param_dic = update_parameters_list(param_dic, K, porosity, concentration)
 
