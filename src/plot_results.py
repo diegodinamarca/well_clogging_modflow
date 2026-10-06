@@ -12,7 +12,10 @@ optional ``--ws`` argument points to the folder containing ``timestep_0``,
 from plot_conc_utils import plot_first_concentration, plot_last_concentration
 from plot_flow_properties import plot_flow_properties
 from plot_head_utils import plot_first_head, plot_last_head
+from flow_model.load_flow_config import load_flow_config
+from utils import plot_breakthrough_curve, plot_concentration_at_position, plot_head_at_position, plot_head_curve
 import argparse
+from pathlib import Path
 
 def plot_first_and_last_concentration(folder):
     plot_first_concentration(folder)
@@ -34,15 +37,47 @@ def main():
     )
     args = parser.parse_args()
     model_ws = args.model_ws
+    parameters = load_flow_config(Path(model_ws) / "config.toml")
     for simulation_i in range(args.n):
         # Each timestep folder contains the results to plot for that step.
-        folder = (
-            f"{model_ws}/simulations/sim_{simulation_i}"
-        )
+        folder = Path(model_ws) / "simulations" / f"sim_{simulation_i}"
         print(folder)
         plot_first_and_last_concentration(folder)
         plot_first_and_last_head(folder)
         plot_flow_properties(folder, layer=0)
+        for (well_row, well_column), well_layers in zip(
+            parameters["well_location"], parameters["well_layer"]
+        ):
+            for well_layer in well_layers:
+                plot_concentration_at_position(
+                    folder,
+                    x=well_column - 1,
+                    y=well_row - 1,
+                    layer=well_layer - 1,
+                )
+                plot_head_at_position(
+                    folder,
+                    x=well_column - 1,
+                    y=well_row - 1,
+                    layer=well_layer - 1,
+                )
+
+    for (well_row, well_column), well_layers in zip(
+        parameters["well_location"], parameters["well_layer"]
+    ):
+        for well_layer in well_layers:
+            plot_breakthrough_curve(
+                Path(model_ws) / "simulations",
+                x=well_column - 1,
+                y=well_row - 1,
+                layer=well_layer - 1,
+            )
+            plot_head_curve(
+                Path(model_ws) / "simulations",
+                x=well_column - 1,
+                y=well_row - 1,
+                layer=well_layer - 1,
+            )
 
 if __name__ == "__main__":
     main()
