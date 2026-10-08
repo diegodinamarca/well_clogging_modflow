@@ -267,6 +267,7 @@ def load_flow_config(config_path=None):
 
         # --- methods parameters ---
         "lambdak": methods_parameters["lambdak"],
+        "n": methods_parameters.get("n"),
 
         # --- grid ---
         "nlay": nlay,

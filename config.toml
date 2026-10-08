@@ -5,7 +5,6 @@ mt3dms = "/home/diego/modflow/modflow6/bin/mf6"
 [folders]
 modelname_mf= "flow_model"
 modelname_mt = 'transport_model'
-figures = "figures"
 
 [grid]
 ztop = -3
@@ -24,22 +23,30 @@ well_refinement_radius = 10 # Same length units as delr and delc
 
 [methods]
 conductivity = "avgK"
+k_update_method = "exp_decay" #kozeny-carman / exp_decay
+
+[methods_parameters]
+lambdak = 0.01
+n = 0.01
+
+[sensitivity]
+sensitivity_intervals = 4
+porcentage_minimum = 50
+porcentage_maximum = 150
 
 [time]
-nper_mf = 2
-nper_mt = 2
-perlen_mf = [3650, 14600]
-perlen_mt = [3650, 14600]
-nstp_mf = [200, 100]
-nstp_mt = [200, 100]
-steady_mf = [true, true]
+nper_mf = 1
+nper_mt = 1
+perlen_mf = [365]
+perlen_mt = [365]
+nstp_mf = [100]
+nstp_mt = [100]
+steady_mf = [true]
 
 [hydrology]
-recharge = 0.0025
-recharge_infiltration_factor = 0.3
-sand_lens_percentage = 0.1
+recharge = 0
 well_location = [[10,10]]
-well_pumping_rate = [5]
+well_pumping_rate = [20]
 well_layer = [[1,2]]
 
 [transport]
@@ -48,8 +55,10 @@ longitudinal_dispersivity = 3.0
 horizontal_transverse_dispersivity = 0.3
 vertical_transverse_dispersivity = 0.3
 ncomp = 1
-initial_concentration = 0.0
-initial_sorbed_concentration = 1.0
+initial_concentration = 10.0
+initial_aquifer_concentration = 0
+initial_source_concentration = 5
+source_active_periods = [1] # list length must match nper_mt and nper_mf
 observation_row = 10
 observation_column = 10
 source_row = 10
