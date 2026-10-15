@@ -46,6 +46,26 @@ def plot_array_at_position(array, x, y, layer=0, times=None, ax=None):
     ax.set_ylabel("Value")
     return ax
 
+
+def _regular_timestep_duration(times, configured_duration=None):
+    """Return a simulation's regular output interval or its configured fallback."""
+    times = np.asarray(times, dtype=float)
+    if not len(times):
+        raise ValueError("Cannot determine a timestep duration without output times.")
+    if len(times) > 1:
+        duration = float(times[1] - times[0])
+    elif configured_duration is not None:
+        duration = float(configured_duration)
+    else:
+        raise ValueError(
+            "A configured timestep duration is required when a simulation "
+            "contains only one output timestep."
+        )
+    if not np.isfinite(duration) or duration <= 0:
+        raise ValueError(f"Timestep duration must be positive; got {duration}.")
+    return duration
+
+
 def plot_head_at_position(
     model_ws,
     x,
@@ -53,6 +73,7 @@ def plot_head_at_position(
     layer=0,
     modelname_mf="flow_model",
     output_path=None,
+    timestep_duration=None,
 ):
     """Save a head plot for one cell, optionally joining simulations."""
     if isinstance(model_ws, (str, Path)):
@@ -76,8 +97,7 @@ def plot_head_at_position(
                 f"expected {expected_shape}."
             )
 
-    # get length of each timestep, assuming regular length timesteps
-    delta = time_arrays[0][0] - time_arrays[0][1]
+    delta = _regular_timestep_duration(time_arrays[0], timestep_duration)
 
     adjusted_times = [time_arrays[0]]
     for times in time_arrays[1:]:
@@ -114,6 +134,7 @@ def plot_concentration_at_position(
     layer=0,
     modelname_mt="transport_model",
     output_path=None,
+    timestep_duration=None,
 ):
     """Save a concentration plot for one cell, optionally joining simulations."""
     if isinstance(model_ws, (str, Path)):
@@ -138,8 +159,9 @@ def plot_concentration_at_position(
             )
 
     adjusted_times = [time_arrays[0]]
+    delta = _regular_timestep_duration(time_arrays[0], timestep_duration)
     for times in time_arrays[1:]:
-        adjusted_times.append(times - times[0] + adjusted_times[-1][-1] + 1)
+        adjusted_times.append(times - times[0] + adjusted_times[-1][-1] + delta)
     concentration = np.concatenate(concentration_arrays, axis=0)
     times = np.concatenate(adjusted_times)
 
@@ -172,6 +194,7 @@ def plot_head_curve(
     layer=0,
     modelname_mf="flow_model",
     output_path=None,
+    timestep_duration=None,
 ):
     """Plot one continuous breakthrough curve across all sim_i folders."""
     model_ws = Path(model_ws)
@@ -199,6 +222,7 @@ def plot_head_curve(
         layer=layer,
         modelname_mf=modelname_mf,
         output_path=output_path,
+        timestep_duration=timestep_duration,
     )
 
 
@@ -209,6 +233,7 @@ def plot_breakthrough_curve(
     layer=0,
     modelname_mt="transport_model",
     output_path=None,
+    timestep_duration=None,
 ):
     """Plot one continuous breakthrough curve across all sim_i folders."""
     model_ws = Path(model_ws)
@@ -236,6 +261,7 @@ def plot_breakthrough_curve(
         layer=layer,
         modelname_mt=modelname_mt,
         output_path=output_path,
+        timestep_duration=timestep_duration,
     )
 
 def get_concentration_at_time(model_ws, timestp, modelname_mt="transport_model"):

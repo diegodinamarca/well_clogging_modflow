@@ -239,6 +239,7 @@ def load_flow_config(config_path=None):
     nstp_mf = time["nstp_mf"]
     nstp_mt = time["nstp_mt"]
     steady_mf = time["steady_mf"]
+    timestep_duration = time.get("timestep_duration")
 
     
     # ===== DISPERSION =====
@@ -355,6 +356,7 @@ def load_flow_config(config_path=None):
         "nstp_mf": nstp_mf,
         "nstp_mt": nstp_mt,
         "steady_mf": steady_mf,
+        "timestep_duration": timestep_duration,
 
         # --- boundary & initial ---
         "ibound": ibound,

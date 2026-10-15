@@ -38,6 +38,7 @@ def calculate_hydraulic_conductivity(
     if method == "lm":
         if linear_slope is None:
             raise ValueError("Parameter linear_slope must be provided for linear method.")
+        print(f"Reducing hydraulic conductivity in affected cells by a factor of {linear_slope}.")
         reference_conductivity[affected_cells] *= linear_slope
         return reference_conductivity
 
@@ -172,6 +173,11 @@ def run_clogging_workflow(
             affected_cells=affected_cells
         )
         param_dic = update_parameters_list(param_dic, K, porosity, head, concentration)
+        np.save(
+            Path(param_dic["model_ws"]) / "deposited_mass.npy",
+            deposited_mass,
+            allow_pickle=False,
+        )
         iteration_results.append(
             {
                 "iteration": iteration,
@@ -193,6 +199,7 @@ def main():
         param_dic["model_ws"],
         param_dic.get("k_linear_slope"),
         k_update_method=param_dic.get("k_update_method", "lm"),
+        iterations=10
     )
 
 
