@@ -44,7 +44,11 @@ def main():
         print(folder)
         plot_first_and_last_concentration(folder)
         plot_first_and_last_head(folder)
-        plot_flow_properties(folder, layer=0)
+        plot_flow_properties(
+            folder,
+            layer=0,
+            mask=parameters["ibound"] != 0,
+        )
         for (well_row, well_column), well_layers in zip(
             parameters["well_location"], parameters["well_layer"]
         ):

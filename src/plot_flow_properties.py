@@ -12,8 +12,13 @@ def plot_flow_properties(
     totim=None,
     output_path=None,
     show=False,
+    mask=None,
 ):
-    """Plot hydraulic head and horizontal conductivity for one model layer."""
+    """Plot hydraulic head and conductivity for one layer.
+
+    ``mask`` is a model-grid-shaped array where nonzero values identify active
+    cells.
+    """
     workspace = Path(model_ws).resolve()
     head_path = workspace / f"{modelname_mf}.hds"
     if not head_path.exists():
@@ -30,6 +35,14 @@ def plot_flow_properties(
     nlay, nrow, ncol = gwf.modelgrid.shape
     if not 0 <= layer < nlay:
         raise ValueError(f"Layer must be between 0 and {nlay - 1}.")
+    active_mask = None
+    if mask is not None:
+        active_mask = np.asarray(mask) != 0
+        if active_mask.shape != (nlay, nrow, ncol):
+            raise ValueError(
+                "Mask shape must match the model grid "
+                f"{(nlay, nrow, ncol)}, got {active_mask.shape}."
+            )
 
     head_file = flopy.utils.HeadFile(str(head_path), text="HEAD")
     times = head_file.get_times()
@@ -45,15 +58,20 @@ def plot_flow_properties(
         totim = matching_times[0]
 
     heads = head_file.get_data(totim=totim)
-    head_layer = np.ma.masked_where(
-        ~np.isfinite(heads[layer]) | (heads[layer] < -1.0e20),
-        heads[layer],
-    )
+    head_mask = ~np.isfinite(heads[layer]) | (heads[layer] < -1.0e20)
+    if active_mask is not None:
+        head_mask |= ~active_mask[layer]
+    head_layer = np.ma.masked_where(head_mask, heads[layer])
 
     conductivity = np.asarray(gwf.npf.k.array)
     if conductivity.ndim == 0:
         conductivity = np.full((nlay, nrow, ncol), conductivity)
     conductivity_layer = conductivity[layer]
+    if active_mask is not None:
+        conductivity_layer = np.ma.masked_where(
+            ~active_mask[layer],
+            conductivity_layer,
+        )
 
     figure, axes = plt.subplots(1, 2, figsize=(12, 5), constrained_layout=True)
 
@@ -83,4 +101,3 @@ def plot_flow_properties(
         plt.show()
     plt.close(figure)
     return output_path
-
