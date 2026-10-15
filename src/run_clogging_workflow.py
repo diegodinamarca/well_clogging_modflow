@@ -7,7 +7,7 @@ from pathlib import Path
 
 import flopy
 import numpy as np
-from utils import get_last_concentration
+from utils import get_last_concentration, get_last_head
 from flow_model.load_flow_config import load_flow_config
 from flow_model.run_flow_model import run_flow_model
 from transport_model.run_transport_model import run_transport_model
@@ -19,7 +19,7 @@ def calculate_porosity(porosity, deposited_mass):
 
 def calculate_hydraulic_conductivity(
     porosity, reference_porosity, reference_conductivity, method="kozeny_carman",
-    time = None, lamb = None, n=1
+    time = None, lamb = None, linear_slope=None, affected_cells=None
 ):
     if not method in ["kozeny_carman", "exp_decay", "lm"]:
         raise ValueError("Unsupported method for calculating hydraulic conductivity.")
@@ -36,9 +36,10 @@ def calculate_hydraulic_conductivity(
             raise ValueError("Time and lambda must be provided for exponential decay method.")
         return reference_conductivity * np.exp(-lamb * time)
     if method == "lm":
-        if n is None:
-            raise ValueError("Parameter n must be provided for linear method.")
-        return reference_conductivity * (n)
+        if linear_slope is None:
+            raise ValueError("Parameter linear_slope must be provided for linear method.")
+        reference_conductivity[affected_cells] *= linear_slope
+        return reference_conductivity
 
 
 def run_modflow(param_dic):
@@ -66,9 +67,9 @@ def failed_run_modflow(buff, source="flow", model_ws="."):
         raise ValueError("Buffer source must be either 'flow' or 'transport'. Which model failed to run?")
     log_path.write_text("\n".join(buff))
 
-def calculate_deposition(concentration):
+def calculate_deposition(concentration, dep_rate=0.01):
     # Placeholder for deposition calculation logic
-    deposited_mass = concentration * 0.1  # Example: 10% of concentration
+    deposited_mass = concentration * dep_rate
     return deposited_mass
 
 def initial_conditions(config_path):
@@ -76,9 +77,9 @@ def initial_conditions(config_path):
     param_dic = load_flow_config(config_path = config_path)
     return param_dic
 
-def update_concentration(param_dic, new_concentration):
-    param_dic["sconc"] = new_concentration
-    return param_dic
+def update_concentration(concentration, deposited_mass):
+    new_concentration = concentration - deposited_mass
+    return new_concentration
 
 def read_hyraulic_conductivity_file():
     # Placeholder for reading hydraulic conductivity file logic
@@ -88,17 +89,13 @@ def read_porosity_file():
     # Placeholder for reading porosity file logic
     pass
 
-def calculate_deposition(concentration):
-    # Placeholder for calculating deposition logic
-    deposited_mass = concentration * 0.01  # Example: 10% of concentration
 
-    return deposited_mass
-
-def update_parameters_list(param_list, new_K, porosity, concentration):
+def update_parameters_list(param_list, new_K, porosity, head, concentration):
     # Update the parameter list with new hydraulic conductivity
     param_list["hk"] = new_K
     param_list["porosity"] = porosity
-    param_list["concentration"] = concentration
+    param_list["strt"] = head
+    param_list["sconc"] = concentration
     return param_list
 
 
@@ -129,7 +126,7 @@ def run_clogging_workflow(
     param_dic["model_ws"] = str(base_workspace)
     if k_update_method is None:
         k_update_method = param_dic.get("k_update_method", "exp_decay")
-    param_dic["n"] = parameter_value
+    param_dic["k_linear_slope"] = parameter_value
     iteration_results = []
 
     for iteration in range(iterations):
@@ -145,6 +142,7 @@ def run_clogging_workflow(
         concentration = get_last_concentration(
             param_dic["model_ws"], param_dic["modelname_mt"]
         )
+        head = get_last_head(param_dic["model_ws"], param_dic["modelname_mf"])
         mean_k = float(np.mean(param_dic["hk"]))
 
         print (f"##################### Iteration {iteration} Summary ################")
@@ -153,9 +151,16 @@ def run_clogging_workflow(
         print(f"Mean concentration at iteration {iteration}: {round(np.mean(concentration), 2)}")
         print (f"#####################################################################")
 
-        param_dic = update_concentration(param_dic, concentration)
-        deposited_mass = calculate_deposition(concentration)
-        porosity = calculate_porosity(param_dic["porosity"], deposited_mass)
+        deposited_mass = calculate_deposition(concentration, dep_rate=param_dic.get("deposition_rate", 0.01))
+        concentration = update_concentration(concentration, deposited_mass)
+        #porosity = calculate_porosity(param_dic["porosity"], deposited_mass)
+        porosity = param_dic["porosity"]
+
+        # get cells where deposited mass is greater than a threshold
+        threshold = param_dic.get("deposition_threshold", 0.001)
+        affected_cells = deposited_mass > threshold
+        print(f"shape of affected_cells: {affected_cells.shape}, number of affected cells: {np.sum(affected_cells)}")
+        # Reduce hydraulic conductivity in affected cells
         K = calculate_hydraulic_conductivity(
             porosity,
             param_dic["porosity"],
@@ -163,9 +168,10 @@ def run_clogging_workflow(
             method=k_update_method,
             time=iteration,
             lamb=param_dic["lambdak"],
-            n=parameter_value,
+            linear_slope=parameter_value,
+            affected_cells=affected_cells
         )
-        param_dic = update_parameters_list(param_dic, K, porosity, concentration)
+        param_dic = update_parameters_list(param_dic, K, porosity, head, concentration)
         iteration_results.append(
             {
                 "iteration": iteration,
@@ -185,8 +191,8 @@ def main():
     return run_clogging_workflow(
         config_path,
         param_dic["model_ws"],
-        param_dic.get("n"),
-        k_update_method=param_dic.get("k_update_method", "exp_decay"),
+        param_dic.get("k_linear_slope"),
+        k_update_method=param_dic.get("k_update_method", "lm"),
     )
 
 

@@ -76,15 +76,18 @@ def plot_head_at_position(
                 f"expected {expected_shape}."
             )
 
+    # get length of each timestep, assuming regular length timesteps
+    delta = time_arrays[0][0] - time_arrays[0][1]
+
     adjusted_times = [time_arrays[0]]
     for times in time_arrays[1:]:
-        adjusted_times.append(times - times[0] + adjusted_times[-1][-1] + 1)
+        adjusted_times.append(times - times[0] + adjusted_times[-1][-1] + delta)
     head = np.concatenate(head_arrays, axis=0)
     times = np.concatenate(adjusted_times)
 
     figure, axis = plt.subplots()
     plot_array_at_position(head, x, y, layer=layer, times=times, ax=axis)
-    axis.set_xlabel("Time (days)")
+    axis.set_xlabel("Time (hours)")
     axis.set_ylabel("Head")
     axis.set_title(f"Head at row {y + 1}, column {x + 1}, layer {layer + 1}")
     figure.tight_layout()
@@ -142,7 +145,7 @@ def plot_concentration_at_position(
 
     figure, axis = plt.subplots()
     plot_array_at_position(concentration, x, y, layer=layer, times=times, ax=axis)
-    axis.set_xlabel("Time (days)")
+    axis.set_xlabel("Time (hours)")
     axis.set_ylabel("Concentration")
     axis.set_title(f"Concentration at row {y + 1}, column {x + 1}, layer {layer + 1}")
     figure.tight_layout()

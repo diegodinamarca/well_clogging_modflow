@@ -48,7 +48,7 @@ def create_mf6_simulation(param_dic, model_ws=None):
     # The steady-state or transient nature of each period is also defined using the steady_periods list.
     flopy.mf6.ModflowTdis(
         sim,
-        time_units="DAYS",
+        time_units="HOURS",
         nper=nper,
         perioddata=[
             (period_lengths[period], steps_per_period[period], 1.0)

@@ -6,6 +6,7 @@ Created on Thu Apr 23 11:05:39 2026
 """
 
 import tomllib
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -76,6 +77,45 @@ def _map_grid_index(value, size, index_map, name):
     return int(index_map[index]) + 1
 
 
+def _create_circular_domain(nrow, ncol, well_location):
+    """Create a discrete circular ibound mask centered on one coarse-grid well."""
+    if len(well_location) != 2:
+        raise ValueError("A circular domain requires one well row and column.")
+    well_row, well_column = (int(value) - 1 for value in well_location)
+    if not (0 <= well_row < nrow and 0 <= well_column < ncol):
+        raise ValueError("Circular-domain well location is outside the coarse grid.")
+
+    rows, columns = np.ogrid[:nrow, :ncol]
+    radius = nrow / 2
+    inside_circle = (
+        (rows - well_row) ** 2 + (columns - well_column) ** 2 <= radius**2
+    )
+
+    padded_circle = np.pad(inside_circle, 1, constant_values=False)
+    perimeter = np.zeros_like(inside_circle)
+    for row_offset in range(3):
+        for column_offset in range(3):
+            if row_offset == 1 and column_offset == 1:
+                continue
+            perimeter |= inside_circle & ~padded_circle[
+                row_offset : row_offset + nrow,
+                column_offset : column_offset + ncol,
+            ]
+
+    domain = np.where(inside_circle, 1, 0).astype(np.int32)
+    domain[perimeter] = -1
+    return domain
+
+def plot_circular_domain(mask):
+            import matplotlib.pyplot as plt
+
+            plt.imshow(mask[0], cmap="coolwarm", origin="upper")
+            plt.colorbar(label="Ibound Value")
+            plt.title("Circular Domain Ibound Mask")
+            plt.xlabel("Column Index")
+            plt.ylabel("Row Index")
+            plt.show()
+
 def load_flow_config(config_path=None):
     """Load model inputs from TOML and build the derived flow configuration."""
     if config_path is None:
@@ -109,6 +149,9 @@ def load_flow_config(config_path=None):
     coarse_ncol = grid["ncol"]
     coarse_delr = grid["delr"]
     coarse_delc = grid["delc"]
+    circular_domain = grid.get("circular_domain", False)
+    if not isinstance(circular_domain, bool):
+        raise ValueError("grid.circular_domain must be a TOML boolean.")
 
     # ===== WELL INPUT ===== #
     coarse_well_location = hydrology["well_location"]
@@ -144,21 +187,40 @@ def load_flow_config(config_path=None):
         for row, column in coarse_well_location
     ]
 
-    # ===== INITIAL HEAD =====
-    coarse_strt = np.ones((nlay, coarse_nrow, coarse_ncol), dtype=np.float32) * 25.0
-    coarse_strt[:, :, 0] = 25.0
-    coarse_strt[:, :, -1] = 24.5
-    strt = np.take(np.take(coarse_strt, row_parent, axis=1), column_parent, axis=2)
-
     # ===== BOUNDARY CONDITIONS =====
-    coarse_ibound = np.ones((nlay, coarse_nrow, coarse_ncol), dtype=np.int32)
-    coarse_ibound[:, :, 0] = -1
-    coarse_ibound[:, :, -1] = -1
-    coarse_ibound[:, 0, :] = 1
-    coarse_ibound[:, -1, :] = 1
+    if circular_domain and len(coarse_well_location) == 1:
+        circular_mask = _create_circular_domain(
+            coarse_nrow, coarse_ncol, coarse_well_location[0]
+        )
+        coarse_ibound = np.broadcast_to(
+            circular_mask, (nlay, coarse_nrow, coarse_ncol)
+        ).copy()
+        # Plot circular domain for verification
+        # plot_circular_domain(circular_mask)
+    else:
+        if circular_domain:
+            warnings.warn(
+                "Circular domain generation requires exactly one configured well; "
+                "using the existing domain.",
+                UserWarning,
+                stacklevel=2,
+            )
+        coarse_ibound = np.ones((nlay, coarse_nrow, coarse_ncol), dtype=np.int32)
+        coarse_ibound[:, :, 0] = -1
+        coarse_ibound[:, :, -1] = -1
+        coarse_ibound[:, 0, :] = 1
+        coarse_ibound[:, -1, :] = 1
     ibound = np.take(
         np.take(coarse_ibound, row_parent, axis=1), column_parent, axis=2
     )
+
+
+    # ===== INITIAL HEAD =====
+    coarse_strt = np.ones((nlay, coarse_nrow, coarse_ncol), dtype=np.float32) * 25.0
+    #coarse_strt[:, :, 0] = 25.0
+    #coarse_strt[:, :, -1] = 24.5
+    strt = np.take(np.take(coarse_strt, row_parent, axis=1), column_parent, axis=2)
+
 
     # ===== HYDRAULIC PARAMETERS =====
     hk, vka, ss, laytyp = create_hyd_params(grid, nlay, nrow, ncol, method=methods["conductivity"])
@@ -267,7 +329,7 @@ def load_flow_config(config_path=None):
 
         # --- methods parameters ---
         "lambdak": methods_parameters["lambdak"],
-        "n": methods_parameters.get("n"),
+        "k_linear_slope": methods_parameters.get("k_linear_slope"),
 
         # --- grid ---
         "nlay": nlay,
@@ -306,6 +368,8 @@ def load_flow_config(config_path=None):
 
         # --- transport ---
         "porosity": prsity,
+        "deposition_rate": transport.get("deposition_rate", 0.01),
+        "deposition_threshold": transport.get("deposition_threshold", 0.001),
         
         # --- recharge ---
         "recharge": recharge,
