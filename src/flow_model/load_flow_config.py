@@ -249,13 +249,11 @@ def load_flow_config(config_path=None):
 
     # ===== CONCENTRATION =====
     ncomp = transport["ncomp"]
-    initial_concentration = transport.get("initial_concentration", 0.0)
-    gw_c0 = transport.get("initial_aquifer_concentration", initial_concentration)
-    c0 = transport.get("initial_source_concentration", initial_concentration)
+    gw_c0 = transport.get("initial_aquifer_concentration", 0.0)
+    c0 = transport.get("initial_source_concentration", 0.0)
     active_periods = transport.get(
         "source_active_periods", [0.0] * time["nper_mt"]
     )
-
 
     # ===== ARRAYS =====
     icbund = np.ones((nlay, nrow, ncol), dtype=np.int32)
@@ -307,9 +305,9 @@ def load_flow_config(config_path=None):
     )
 
     # ===== SORPTION / REACTION =====
-    rhob = transport["bulk_density"]
+    bulk_density = transport["bulk_density"]
     kd = transport["distribution_coefficient"]
-    lambda1 = transport["decay_rate"]
+    decay_rate = transport["decay_rate"]
     isothm = transport["isothm"]
     ireact = transport["ireact"]
     igetsc = transport["igetsc"]
@@ -404,9 +402,9 @@ def load_flow_config(config_path=None):
         "obs_col": obs_col,
 
         # --- reaction / sorption ---
-        "rhob": rhob,
+        "bulk_density": bulk_density,
         "kd": kd,
-        "lambda1": lambda1,
+        "decay_rate": decay_rate,
         "isothm": isothm,
         "ireact": ireact,
         "igetsc": igetsc,

@@ -5,12 +5,10 @@
 
 from pathlib import Path
 
-import flopy
 import numpy as np
 from utils import get_last_concentration, get_last_head
 from flow_model.load_flow_config import load_flow_config
 from flow_model.run_flow_model import run_flow_model
-from transport_model.run_transport_model import run_transport_model
 
 def calculate_porosity(porosity, deposited_mass):
     # Calculate new porosity based on deposited mass
@@ -38,7 +36,7 @@ def calculate_hydraulic_conductivity(
     if method == "lm":
         if linear_slope is None:
             raise ValueError("Parameter linear_slope must be provided for linear method.")
-        print(f"Reducing hydraulic conductivity in affected cells by a factor of {linear_slope}.")
+        #print(f"Reducing hydraulic conductivity in affected cells by a factor of {1-linear_slope}%.")
         reference_conductivity[affected_cells] *= linear_slope
         return reference_conductivity
 
@@ -82,15 +80,6 @@ def update_concentration(concentration, deposited_mass):
     new_concentration = concentration - deposited_mass
     return new_concentration
 
-def read_hyraulic_conductivity_file():
-    # Placeholder for reading hydraulic conductivity file logic
-    pass
-
-def read_porosity_file():
-    # Placeholder for reading porosity file logic
-    pass
-
-
 def update_parameters_list(param_list, new_K, porosity, head, concentration):
     # Update the parameter list with new hydraulic conductivity
     param_list["hk"] = new_K
@@ -99,13 +88,11 @@ def update_parameters_list(param_list, new_K, porosity, head, concentration):
     param_list["sconc"] = concentration
     return param_list
 
-
 def set_model_workspace(param_dic, timestep, base_workspace=None):
     base_workspace = Path(base_workspace or param_dic["model_ws"])
     param_dic["model_ws"] = str(base_workspace / f"sim_{timestep}")
     print ("Model workspace set to:", param_dic["model_ws"]) 
     return param_dic
-
 
 def run_clogging_workflow(
     config_path,
@@ -154,6 +141,13 @@ def run_clogging_workflow(
 
         deposited_mass = calculate_deposition(concentration, dep_rate=param_dic.get("deposition_rate", 0.01))
         concentration = update_concentration(concentration, deposited_mass)
+
+        # read saved deposited mass from previous iteration if it exists
+        deposited_mass_path = Path(param_dic["model_ws"]) / "deposited_mass.npy"
+        if deposited_mass_path.exists():
+            previous_deposited_mass = np.load(deposited_mass_path)
+            deposited_mass += previous_deposited_mass
+        
         #porosity = calculate_porosity(param_dic["porosity"], deposited_mass)
         porosity = param_dic["porosity"]
 

@@ -221,10 +221,10 @@ def create_mf6_simulation(param_dic, model_ws=None):
     mst_options = {
         "porosity": param_dic["porosity"],
         "sorption": "LINEAR",
-        "bulk_density": param_dic["rhob"],
+        "bulk_density": param_dic["bulk_density"],
         "distcoef": param_dic["kd"],
     }
-    decay = float(param_dic["lambda1"])
+    decay = float(param_dic["decay_rate"])
     if decay > 0.0:
         mst_options.update(first_order_decay=True, decay=decay)
     flopy.mf6.ModflowGwtmst(gwt, **mst_options)
