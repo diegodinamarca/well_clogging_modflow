@@ -9,7 +9,7 @@ import numpy as np
 def plot_last_concentration(folder):
 	"""Plot all layers of the final concentration timestep from a .ucn file."""
 	folder = Path(folder)
-	print(f"Looking for .ucn files in {folder}")
+	#print(f"Looking for .ucn files in {folder}")
 	last_concentration = get_last_concentration(folder)
 	simulation = flopy.mf6.MFSimulation.load(
 		sim_ws=str(folder),
@@ -48,7 +48,7 @@ def plot_last_concentration(folder):
 def plot_first_concentration(folder):
 	"""Plot all layers of the final concentration timestep from a .ucn file."""
 	folder = Path(folder)
-	print(f"Looking for .ucn files in {folder}")
+	#print(f"Looking for .ucn files in {folder}")
 	last_concentration = get_concentration_at_time(folder, timestp=0)
 	simulation = flopy.mf6.MFSimulation.load(
 		sim_ws=str(folder),

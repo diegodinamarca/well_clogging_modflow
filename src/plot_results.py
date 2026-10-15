@@ -81,7 +81,7 @@ def main():
     parameters = load_flow_config(Path(model_ws) / "config.toml")
     flow_timestep_duration = _configured_timestep_duration(parameters, "mf")
     transport_timestep_duration = _configured_timestep_duration(parameters, "mt")
-    print(f"Flow timestep duration: {flow_timestep_duration}")
+    #print(f"Flow timestep duration: {flow_timestep_duration}")
     for simulation_i in range(args.n):
         # Each timestep folder contains the results to plot for that step.
         folder = Path(model_ws) / "simulations" / f"sim_{simulation_i}"

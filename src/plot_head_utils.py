@@ -11,7 +11,7 @@ from utils import get_last_head, get_head_at_time
 def plot_last_head(folder):
     """Plot all layers of the final head timestep from a .hds file."""
     folder = Path(folder)
-    print(f"Looking for .hds files in {folder}")
+    #print(f"Looking for .hds files in {folder}")
     last_head = get_last_head(folder)
     simulation = flopy.mf6.MFSimulation.load(
         sim_ws=str(folder),
@@ -49,7 +49,7 @@ def plot_last_head(folder):
 def plot_first_head(folder):
     """Plot all layers of the first head timestep from a .hds file."""
     folder = Path(folder)
-    print(f"Looking for .hds files in {folder}")
+    #print(f"Looking for .hds files in {folder}")
     first_head = get_head_at_time(folder, timestp=0)
     simulation = flopy.mf6.MFSimulation.load(
         sim_ws=str(folder),

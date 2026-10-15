@@ -11,7 +11,7 @@ def read_concentration_file(model_ws, modelname_mt="transport_model"):
     ucnfile = Path(model_ws) / f"{modelname_mt}.ucn"
     if filenotfound := not ucnfile.exists():
         raise FileNotFoundError(f"No .ucn file found at {ucnfile}")
-    print(f"Reading concentration data from {ucnfile}")
+    #print(f"Reading concentration data from {ucnfile}")
     ucnobj = flopy.utils.HeadFile(ucnfile, text="CONCENTRATION")
     conc = ucnobj.get_alldata()
     return conc
@@ -299,7 +299,7 @@ def read_head_file(model_ws, modelname_mt="flow_model"):
     ucnfile = Path(model_ws) / f"{modelname_mt}.hds"
     if filenotfound := not ucnfile.exists():
         raise FileNotFoundError(f"No .hds file found at {ucnfile}")
-    print(f"Reading head data from {ucnfile}")
+    #print(f"Reading head data from {ucnfile}")
     ucnobj = flopy.utils.HeadFile(ucnfile, text="HEAD")
     conc = ucnobj.get_alldata()
     return conc
