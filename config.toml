@@ -7,27 +7,29 @@ modelname_mf= "flow_model"
 modelname_mt = 'transport_model'
 
 [grid]
+circular_domain = true
 ztop = -3
 zbot = [-25, -50]
 nlay = 2
-k_values = [20.0, 10]
-laytyp = [1, 1]
+k_values = [1, 0.5]
+laytyp = [0, 0]
 vertical_conductivity_percent = 10.0
 specific_storage = 0.0001
-nrow = 20
-ncol = 20
-delr = 10
-delc = 10
-well_refinement_factor = 2
-well_refinement_radius = 10 # Same length units as delr and delc
+nrow = 30
+ncol = 30
+delr = 3
+delc = 3
+well_refinement_factor = 3
+well_refinement_radius = 3 # Same length units as delr and delc
 
 [methods]
 conductivity = "avgK"
-k_update_method = "exp_decay" #kozeny-carman / exp_decay
+k_update_method = "lm" #kozeny-carman / exp_decay / lm
 
 [methods_parameters]
 lambdak = 0.01
-n = 0.01
+k_linear_slope = 0.01
+
 
 [sensitivity]
 sensitivity_intervals = 4
@@ -35,22 +37,26 @@ porcentage_minimum = 50
 porcentage_maximum = 150
 
 [time]
+# Optional override for single-record outputs, in model time units.
+# timestep_duration = 0.1666666667
 nper_mf = 1
 nper_mt = 1
-perlen_mf = [365]
-perlen_mt = [365]
-nstp_mf = [100]
-nstp_mt = [100]
-steady_mf = [true]
+perlen_mf = [2]
+perlen_mt = [2]
+nstp_mf = [12]
+nstp_mt = [12]
+steady_mf = [false]
 
 [hydrology]
 recharge = 0
-well_location = [[10,10]]
-well_pumping_rate = [20]
+well_location = [[15,15]]
+well_pumping_rate = [100]
 well_layer = [[1,2]]
 
 [transport]
 porosity = 0.3
+deposition_rate = 0.01 #rate of particle deposition (slope m of a linear function d = mC)
+deposition_threshold = 1 # concentration over which permeability is affected
 longitudinal_dispersivity = 3.0
 horizontal_transverse_dispersivity = 0.3
 vertical_transverse_dispersivity = 0.3

@@ -1,0 +1,56 @@
+# document files
+*.pdf
+*.bin
+*.sqlite3
+*.csv
+*.txt
+!requirements-plotting.txt
+*.pyc
+*.json
+
+# flow model files
+*.bas
+*.dis
+*.lmt6
+*.lpf
+*.nam
+*.oc
+*.pcg
+*.wel
+
+# transport model files
+*.adv
+*.btn
+*.dsp
+*.gcg
+*.rct
+*.ssm
+
+# log files
+*.log
+
+#MODFLOW6 FILES
+*.cbc
+*.cnc
+*.fmi
+*.ic
+*.lst
+*.mst
+*.ucn
+*.chd
+*.grb
+*.hds
+*.npf
+*.rcha
+*.sto
+*.ims
+*.gwfgwt
+*.tdis
+
+# image files
+*.png
+
+#test folders
+test*/
+!tests/
+sensitivity_analysis/

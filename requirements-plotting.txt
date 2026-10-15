@@ -1,0 +1,2 @@
+# Standalone interactive HTML plots.
+plotly>=5
