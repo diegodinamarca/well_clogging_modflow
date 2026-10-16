@@ -250,10 +250,7 @@ def load_flow_config(config_path=None):
     # ===== CONCENTRATION =====
     ncomp = transport["ncomp"]
     gw_c0 = transport.get("initial_aquifer_concentration", 0.0)
-    c0 = transport.get("initial_source_concentration", 0.0)
-    active_periods = transport.get(
-        "source_active_periods", [0.0] * time["nper_mt"]
-    )
+    initial_source_concentration = transport.get("initial_source_concentration", 0.0)
 
     # ===== ARRAYS =====
     icbund = np.ones((nlay, nrow, ncol), dtype=np.int32)
@@ -282,17 +279,6 @@ def load_flow_config(config_path=None):
     else:
         raise TypeError("initial aquifer concentration must be an int, float, list, or numpy.ndarray. Check config file.")
 
-    # ===== OBSERVATION POINT =====
-    obs_row = _map_grid_index(
-        transport["observation_row"], coarse_nrow, row_index_map, "observation row"
-    )
-    obs_col = _map_grid_index(
-        transport["observation_column"],
-        coarse_ncol,
-        column_index_map,
-        "observation column",
-    )
-
     # ===== SOURCE LOCATION =====
     source_row = _map_grid_index(
         transport["source_row"], coarse_nrow, row_index_map, "source row"
@@ -317,6 +303,9 @@ def load_flow_config(config_path=None):
 
         # --- executables ---
         "exe_name_mf": exe_name_mf,
+
+        # --- runtime ---
+        "iterations": runtime["iterations"],
 
         # --- folders ---
         "model_ws": model_ws,
@@ -391,15 +380,11 @@ def load_flow_config(config_path=None):
         "trpv": trpv,
 
         # --- source ---
-        "c0": c0,
+        "initial_source_concentration": initial_source_concentration,
         "source_row": source_row,
         "source_col": source_col,
         "source_layer": transport.get("source_layer", 1),
-        "source_active_periods": active_periods,
 
-        # --- observation ---
-        "obs_row": obs_row,
-        "obs_col": obs_col,
 
         # --- reaction / sorption ---
         "bulk_density": bulk_density,

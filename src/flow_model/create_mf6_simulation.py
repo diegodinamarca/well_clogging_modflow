@@ -29,7 +29,7 @@ def create_mf6_simulation(param_dic, model_ws=None):
         raise ValueError("MODFLOW 6 requires matching flow and transport stress periods.")
     if param_dic["nstp_mt"] != steps_per_period:
         raise ValueError("MODFLOW 6 requires matching flow and transport time steps.")
-    source_active_periods = param_dic["source_active_periods"]
+    source_active_periods = param_dic["initial_source_concentration"]
     if len(source_active_periods) != nper:
         raise ValueError("Source concentrations must have one value per stress period.")
 

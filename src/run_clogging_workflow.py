@@ -96,25 +96,16 @@ def set_model_workspace(param_dic, timestep, base_workspace=None):
 
 def run_clogging_workflow(
     config_path,
-    workspace,
-    parameter_value,
-    k_update_method=None,
-    iterations=3,
-):
-    """Run the complete clogging workflow in an independent workspace."""
-    config_path = Path(config_path).resolve()
-    if not config_path.is_file():
-        raise FileNotFoundError(f"Configuration file does not exist: {config_path}")
-    if isinstance(iterations, bool) or not isinstance(iterations, int) or iterations <= 0:
+    param_dic
+    ):
+    iterations = param_dic.get("iterations", 10)  # Default to 10 iterations if not specified
+    if not isinstance(iterations, int) or iterations <= 0:
         raise ValueError("iterations must be a positive integer.")
 
-    param_dic = initial_conditions(config_path)
-    base_workspace = Path(workspace).resolve()
+
+    #param_dic = initial_conditions(config_path)
+    base_workspace = param_dic["model_ws"]
     base_workspace.mkdir(parents=True, exist_ok=True)
-    param_dic["model_ws"] = str(base_workspace)
-    if k_update_method is None:
-        k_update_method = param_dic.get("k_update_method", "exp_decay")
-    param_dic["k_linear_slope"] = parameter_value
     iteration_results = []
 
     for iteration in range(iterations):
@@ -154,16 +145,16 @@ def run_clogging_workflow(
         # get cells where deposited mass is greater than a threshold
         threshold = param_dic.get("deposition_threshold", 0.001)
         affected_cells = deposited_mass > threshold
-        print(f"shape of affected_cells: {affected_cells.shape}, number of affected cells: {np.sum(affected_cells)}")
+        
         # Reduce hydraulic conductivity in affected cells
         K = calculate_hydraulic_conductivity(
             porosity,
             param_dic["porosity"],
             param_dic["hk"],
-            method=k_update_method,
+            method=param_dic["k_update_method"],
             time=iteration,
             lamb=param_dic["lambdak"],
-            linear_slope=parameter_value,
+            linear_slope=param_dic["k_linear_slope"],
             affected_cells=affected_cells
         )
         param_dic = update_parameters_list(param_dic, K, porosity, head, concentration)
@@ -187,13 +178,15 @@ def run_clogging_workflow(
 def main():
     run_dir = Path.cwd().resolve()
     config_path = run_dir / "config.toml"
+    """Run the complete clogging workflow in an independent workspace."""
+    config_path = Path(config_path).resolve()
+    if not config_path.is_file():
+        raise FileNotFoundError(f"Configuration file does not exist: {config_path}")
     param_dic = initial_conditions(config_path)
+    param_dic["model_ws"] = run_dir
     return run_clogging_workflow(
         config_path,
-        param_dic["model_ws"],
-        param_dic.get("k_linear_slope"),
-        k_update_method=param_dic.get("k_update_method", "lm"),
-        iterations=10
+        param_dic
     )
 
 
