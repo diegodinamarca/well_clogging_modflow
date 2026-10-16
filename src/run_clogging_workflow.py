@@ -94,8 +94,16 @@ def set_model_workspace(param_dic, timestep, base_workspace=None):
     print ("Model workspace set to:", param_dic["model_ws"]) 
     return param_dic
 
+def get_previous_workspace(base_workspace, timestep):
+    import re
+    base_workspace = Path(base_workspace)
+    base_workspace = Path(re.sub(r"sim_\d+", "", str(base_workspace)))
+    previous_workspace = base_workspace / f"sim_{timestep - 1}"
+    if not previous_workspace.exists():
+        raise FileNotFoundError(f"Previous workspace does not exist: {previous_workspace}")
+    return previous_workspace
+
 def run_clogging_workflow(
-    config_path,
     param_dic
     ):
     iterations = param_dic.get("iterations", 10)  # Default to 10 iterations if not specified
@@ -135,10 +143,15 @@ def run_clogging_workflow(
 
         # read saved deposited mass from previous iteration if it exists
         deposited_mass_path = Path(param_dic["model_ws"]) / "deposited_mass.npy"
-        if deposited_mass_path.exists():
-            previous_deposited_mass = np.load(deposited_mass_path)
-            deposited_mass += previous_deposited_mass
-        
+
+
+        if iteration > 0:
+            previous_workspace = get_previous_workspace(param_dic["model_ws"], iteration)
+            deposited_mass_path = previous_workspace / "deposited_mass.npy"
+            if deposited_mass_path.exists():
+                previous_deposited_mass = np.load(deposited_mass_path)
+                deposited_mass += previous_deposited_mass
+
         #porosity = calculate_porosity(param_dic["porosity"], deposited_mass)
         porosity = param_dic["porosity"]
 
@@ -183,9 +196,8 @@ def main():
     if not config_path.is_file():
         raise FileNotFoundError(f"Configuration file does not exist: {config_path}")
     param_dic = initial_conditions(config_path)
-    param_dic["model_ws"] = run_dir
+    param_dic["model_ws"] = run_dir / "simulations"
     return run_clogging_workflow(
-        config_path,
         param_dic
     )
 

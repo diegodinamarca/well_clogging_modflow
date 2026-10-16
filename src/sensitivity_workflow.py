@@ -4,6 +4,7 @@ import json
 import math
 from numbers import Integral, Real
 from pathlib import Path
+import warnings
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -84,6 +85,97 @@ def _validate_parameter_name(parameter_name):
         )
 
 
+def _base_parameter_value(param_dic, parameter_name):
+    if parameter_name == "well_pumping_rate":
+        well_locations = param_dic.get("well_location")
+        rates = param_dic.get("well_pumping_rate")
+        if not isinstance(well_locations, (list, tuple)) or len(well_locations) != 1:
+            raise ValueError(
+                "Sensitivity analysis for well_pumping_rate supports exactly "
+                "one configured well."
+            )
+        if not isinstance(rates, (list, tuple)) or len(rates) != 1:
+            raise ValueError(
+                "well_pumping_rate must contain exactly one rate for the "
+                "configured well."
+            )
+        value = rates[0]
+        if isinstance(value, bool) or not isinstance(value, Real) or not math.isfinite(value):
+            raise ValueError("Configured well_pumping_rate must be finite and numeric.")
+        return float(value)
+
+    value = param_dic.get(parameter_name)
+    if parameter_name == "initial_source_concentration":
+        if value is None and "c0" in param_dic:
+            value = param_dic["c0"]
+        if isinstance(value, Real) and not isinstance(value, bool):
+            candidates = [float(value)]
+        elif isinstance(value, (list, tuple)) and value:
+            if any(
+                isinstance(item, bool)
+                or not isinstance(item, Real)
+                or not math.isfinite(item)
+                for item in value
+            ):
+                raise ValueError(
+                    "Configured initial_source_concentration must contain "
+                    "finite numeric values."
+                )
+            candidates = [float(item) for item in value]
+        else:
+            raise ValueError(
+                "Configured initial_source_concentration must be a finite "
+                "number or a non-empty sequence of finite numbers."
+            )
+        if all(
+            math.isclose(candidates[0], item, rel_tol=1e-9, abs_tol=1e-12)
+            for item in candidates[1:]
+        ):
+            return candidates if isinstance(value, (list, tuple)) else candidates[0]
+        return candidates
+
+    if isinstance(value, bool) or not isinstance(value, Real) or not math.isfinite(value):
+        raise TypeError(
+            f"Configured parameter {parameter_name!r} must be a finite numeric "
+            f"scalar; got {type(value).__name__}."
+        )
+    return float(value)
+
+
+def _base_matches_value(base_value, value):
+    if isinstance(base_value, Real):
+        return math.isclose(
+            float(base_value), float(value), rel_tol=1e-9, abs_tol=1e-12
+        )
+    if isinstance(base_value, (list, tuple)) and base_value:
+        return all(
+            math.isclose(float(item), float(value), rel_tol=1e-9, abs_tol=1e-12)
+            for item in base_value
+        )
+    return False
+
+
+def _base_folder_name(parameter_name, base_value):
+    if isinstance(base_value, Real):
+        value_text = _format_value(base_value)
+    else:
+        value_text = "__".join(_format_value(value) for value in base_value)
+    return f"{parameter_name}_{value_text}"
+
+
+def _base_case_label(parameter_name, base_value):
+    if isinstance(base_value, Real):
+        value_text = _format_value(base_value)
+    elif all(
+        math.isclose(base_value[0], value, rel_tol=1e-9, abs_tol=1e-12)
+        for value in base_value[1:]
+    ):
+        value_text = _format_value(base_value[0])
+    else:
+        value_text = "[" + ", ".join(_format_value(value) for value in base_value) + "]"
+    return f"{parameter_name}={value_text} (base case)"
+
+
 def _apply_parameter_value(param_dic, parameter_name, value):
     if parameter_name == "well_pumping_rate":
         well_locations = param_dic.get("well_location")
@@ -103,7 +195,17 @@ def _apply_parameter_value(param_dic, parameter_name, value):
 
     if parameter_name == "initial_source_concentration":
         nper = param_dic.get("nper_mt")
-        param_dic["initial_source_concentration"] = float(value)* int(nper)
+        if isinstance(nper, bool) or not isinstance(nper, Integral) or nper <= 0:
+            raise ValueError(
+                "nper_mt must be a positive integer for "
+                "initial_source_concentration sensitivity."
+            )
+        concentration = float(value)
+        param_dic["initial_source_concentration"] = [concentration] * int(nper)
+        if "c0" in param_dic:
+            param_dic["c0"] = concentration
+        if "source_active_periods" in param_dic:
+            param_dic["source_active_periods"] = [concentration] * int(nper)
         return
 
     if parameter_name not in param_dic:
@@ -191,7 +293,10 @@ def run_sensitivity(
     folder=None,
     overwrite=True
 ):
-    """Run independent clogging simulations across a selected parameter range."""
+    """Run parameter sensitivity cases against a single configuration base case."""
+    if folder is None and isinstance(value_list, (str, Path)):
+        folder = value_list
+        value_list = None
     _validate_parameter_name(parameter_name)
     if value_list is not None:
         if not isinstance(value_list, (list, tuple)) or not value_list:
@@ -209,14 +314,19 @@ def run_sensitivity(
     config_path = _resolve_config_path(output_folder)
 
     initial_parameters = initial_conditions(config_path)
-    _apply_parameter_value(initial_parameters, parameter_name, values[0])
+    base_value = _base_parameter_value(initial_parameters, parameter_name)
+    base_folder_name = _base_folder_name(parameter_name, base_value)
+    base_folder = output_folder / base_folder_name
 
     experiment_names, experiment_labels = _experiment_names(
         parameter_name, values
     )
-    experiment_paths = [output_folder / name for name in experiment_names]
+    experiment_paths = [
+        base_folder if _base_matches_value(base_value, value) else output_folder / name
+        for value, name in zip(values, experiment_names)
+    ]
     metadata_path = output_folder / _METADATA_FILENAME
-    existing = [path for path in experiment_paths if path.exists()]
+    existing = [path for path in [base_folder, *experiment_paths] if path.exists()]
 
     if existing and (not overwrite):
         raise FileExistsError(
@@ -234,14 +344,27 @@ def run_sensitivity(
         "schema_version": 1,
         "parameter_name": parameter_name,
         "values": [float(value) for value in values],
+        "base_case": {
+            "value": base_value,
+            "folder": base_folder_name,
+            "status": "pending",
+        },
         "config_path": str(config_path),
         **_plot_metadata(initial_parameters),
         "experiments": [
             {
                 "value": float(value),
-                "folder": name,
+                "folder": (
+                    base_folder_name
+                    if _base_matches_value(base_value, value)
+                    else name
+                ),
                 "label": label,
-                "status": "pending",
+                "status": (
+                    "skipped_base_value"
+                    if _base_matches_value(base_value, value)
+                    else "pending"
+                ),
             }
             for value, name, label in zip(
                 values, experiment_names, experiment_labels
@@ -250,10 +373,51 @@ def run_sensitivity(
     }
     _write_metadata(metadata_path, metadata)
 
+    if not base_folder.exists() or overwrite:
+        base_parameters = initial_conditions(config_path)
+        base_parameters["model_ws"] = base_folder
+        base_folder.mkdir(parents=True, exist_ok=True)
+        metadata["base_case"]["status"] = "running"
+        _write_metadata(metadata_path, metadata)
+        result = run_clogging_workflow(config_path, base_parameters)
+        if not isinstance(result, dict) or result.get("success") is not True:
+            metadata["base_case"]["status"] = "failed"
+            metadata["base_case"]["result"] = (
+                {
+                    key: result[key]
+                    for key in ("failed_iteration", "workspace")
+                    if key in result
+                }
+                if isinstance(result, dict)
+                else {"result": repr(result)}
+            )
+            _write_metadata(metadata_path, metadata)
+            failed_iteration = metadata["base_case"]["result"].get(
+                "failed_iteration"
+            )
+            iteration_detail = (
+                f" failed_iteration={failed_iteration}"
+                if failed_iteration is not None
+                else ""
+            )
+            raise RuntimeError(
+                f"Sensitivity base-case run{iteration_detail} failed in "
+                f"{metadata['base_case']['result'].get('workspace', base_folder)}."
+            )
+        metadata["base_case"]["status"] = "completed"
+        metadata["base_case"]["iteration_count"] = len(
+            result.get("iterations", [])
+        )
+    else:
+        metadata["base_case"]["status"] = "reused_existing"
+    _write_metadata(metadata_path, metadata)
+
     completed = []
     for value, experiment_path, experiment in zip(
         values, experiment_paths, metadata["experiments"]
     ):
+        if _base_matches_value(base_value, value):
+            continue
         param_dic = initial_conditions(config_path)
         _apply_parameter_value(param_dic, parameter_name, value)
         param_dic["model_ws"] = experiment_path
@@ -298,6 +462,7 @@ def run_sensitivity(
         "parameter_name": parameter_name,
         "values": [float(value) for value in values],
         "experiment_folders": completed,
+        "base_case_folder": str(base_folder),
     }
 
 
@@ -329,7 +494,8 @@ def _discover_experiments(folder):
             experiment
             for experiment in recorded_experiments
             if not isinstance(experiment, dict)
-            or experiment.get("status") != "completed"
+            or experiment.get("status")
+            not in ("completed", "skipped_base_value")
         ]
         if failed:
             details = ", ".join(
@@ -346,6 +512,45 @@ def _discover_experiments(folder):
             )
         if not recorded_experiments:
             raise ValueError(f"No experiments recorded in {metadata_path}.")
+        base_case = metadata.get("base_case")
+        if base_case is not None:
+            if not isinstance(base_case, dict):
+                raise ValueError(f"Base case in {metadata_path} must be an object.")
+            if base_case.get("status") not in ("completed", "reused_existing"):
+                raise RuntimeError(
+                    f"Cannot plot incomplete sensitivity base case: "
+                    f"{base_case.get('status', 'unknown')}."
+                )
+            base_folder = base_case.get("folder")
+            if (
+                not isinstance(base_folder, str)
+                or Path(base_folder).name != base_folder
+                or base_folder in (".", "..")
+            ):
+                raise ValueError(
+                    f"Invalid base-case folder in {metadata_path}: "
+                    f"{base_folder!r}."
+                )
+            base_value = base_case.get("value")
+            valid_base_value = isinstance(base_value, Real) and not isinstance(
+                base_value, bool
+            )
+            valid_base_value = valid_base_value and math.isfinite(base_value)
+            valid_base_value = valid_base_value or (
+                isinstance(base_value, list)
+                and bool(base_value)
+                and all(
+                    isinstance(item, Real)
+                    and not isinstance(item, bool)
+                    and math.isfinite(item)
+                    for item in base_value
+                )
+            )
+            if not valid_base_value:
+                raise ValueError(
+                    f"Invalid base-case value in {metadata_path}: "
+                    f"{base_value!r}."
+                )
         for experiment in recorded_experiments:
             experiment_folder = experiment.get("folder")
             value = experiment.get("value")
@@ -573,6 +778,7 @@ def _read_experiment(folder, metadata, experiment, x, y, layer):
             f"{metadata['parameter_name']}={_format_value(experiment['value'])}",
         ),
         "folder": workspace,
+        "grid_shape": grid_shape,
         "times": times,
         "head": np.concatenate(head_parts),
         "concentration": np.concatenate(concentration_parts),
@@ -585,10 +791,125 @@ def _read_experiment(folder, metadata, experiment, x, y, layer):
 def _ensure_matching_times(experiments, key):
     expected = experiments[0][key]
     for experiment in experiments[1:]:
-        if not np.allclose(experiment[key], expected):
+        actual = experiment[key]
+        if actual.shape != expected.shape or not np.allclose(actual, expected):
             raise ValueError(
                 f"Time axes differ between sensitivity experiments for {key}."
             )
+
+
+def _calculate_output_ratio(sensitivity, base, variable, label):
+    sensitivity = np.asarray(sensitivity, dtype=float)
+    base = np.asarray(base, dtype=float)
+    if sensitivity.shape != base.shape:
+        raise ValueError(
+            f"{variable} output shapes differ between {label} and the base case: "
+            f"{sensitivity.shape} != {base.shape}."
+        )
+    if not np.all(np.isfinite(sensitivity)) or not np.all(np.isfinite(base)):
+        raise ValueError(
+            f"{variable} outputs for {label} and the base case must be finite."
+        )
+
+    undefined = base == 0
+    ratio = np.full(sensitivity.shape, np.nan, dtype=float)
+    np.divide(sensitivity, base, out=ratio, where=~undefined)
+    if np.any(undefined):
+        warnings.warn(
+            f"{variable} ratio for {label} has {int(np.count_nonzero(undefined))} "
+            "undefined sample(s) because the base-case output is zero; those "
+            "samples are shown as gaps.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+    if not np.all(np.isfinite(ratio[~undefined])):
+        raise ValueError(
+            f"{variable} ratio for {label} contains non-finite values."
+        )
+    return ratio
+
+
+def _save_ratio_plots(
+    output_folder, experiments, base_experiment, parameter_name, x, y, layer
+):
+    figures_folder = output_folder / "figures"
+    figures_folder.mkdir(parents=True, exist_ok=True)
+    position = f"row_{y + 1}_column_{x + 1}_layer_{layer + 1}"
+    variables = (
+        ("head", "Hydraulic head ratio", "hydraulic_head_ratio"),
+        ("concentration", "Concentration ratio", "concentration_ratio"),
+        ("deposited_mass", "Deposited mass ratio", "deposited_mass_ratio"),
+        (
+            "hydraulic_conductivity",
+            "Hydraulic conductivity ratio",
+            "hydraulic_conductivity_ratio",
+        ),
+    )
+    for variable, ylabel, filename in variables:
+        times_key = (
+            "iteration_times"
+            if variable in ("deposited_mass", "hydraulic_conductivity")
+            else "times"
+        )
+        figure, axis = plt.subplots()
+        ratio_experiments = []
+        for experiment in experiments:
+            if experiment["grid_shape"] != base_experiment["grid_shape"]:
+                raise ValueError(
+                    f"Spatial grids differ between {experiment['label']} and "
+                    "the base case; ratio outputs cannot be aligned."
+                )
+            if experiment[times_key].shape != base_experiment[times_key].shape:
+                raise ValueError(
+                    f"{variable} time axes differ between {experiment['label']} "
+                    "and the base case."
+                )
+            if not np.allclose(
+                experiment[times_key], base_experiment[times_key]
+            ):
+                raise ValueError(
+                    f"{variable} time axes differ between {experiment['label']} "
+                    "and the base case."
+                )
+            ratio = _calculate_output_ratio(
+                experiment[variable],
+                base_experiment[variable],
+                variable,
+                experiment["label"],
+            )
+            ratio_experiments.append(
+                {
+                    "label": experiment["label"],
+                    "times": experiment[times_key],
+                    "iteration_times": experiment[times_key],
+                    variable: ratio,
+                }
+            )
+            axis.plot(
+                experiment[times_key],
+                ratio,
+                label=experiment["label"],
+            )
+        axis.axhline(1.0, color="black", linewidth=0.8, linestyle="--")
+        axis.set_xlabel("Time (hours)")
+        axis.set_ylabel(ylabel)
+        axis.set_title(f"{ylabel} at {position.replace('_', ' ')}")
+        axis.legend()
+        figure.tight_layout()
+        figure.savefig(
+            figures_folder
+            / f"{filename}_{parameter_name}_{position}.png",
+            dpi=160,
+        )
+        plt.close(figure)
+        stem = f"{filename}_{parameter_name}_{position}"
+        _save_interactive_comparison(
+            figures_folder / f"{stem}.html",
+            ratio_experiments,
+            variable,
+            f"{ylabel} at {position.replace('_', ' ')}",
+            ylabel,
+        )
 
 
 def _save_interactive_comparison(path, experiments, variable, title, ylabel):
@@ -674,16 +995,19 @@ def _save_comparison_plots(output_folder, experiments, parameter_name, x, y, lay
 
 
 def _save_relationship_plots(
-    output_folder, experiment, parameter_name, x, y, layer
+    output_folder, experiment, parameter_name, x, y, layer, base_experiment=None
 ):
     figures_folder = output_folder / "figures"
     position = f"row_{y + 1}_column_{x + 1}_layer_{layer + 1}"
-    k = experiment["hydraulic_conductivity"]
-    iteration_times = experiment["iteration_times"]
     comparisons = (
-        ("concentration", "Concentration (model units)", experiment["concentration"]),
-        ("hydraulic_head", "Hydraulic head (model units)", experiment["head"]),
-        ("deposited_mass", "Deposited mass (model units)", experiment["deposited_mass"]),
+        ("concentration", "Concentration (model units)", "concentration"),
+        ("hydraulic_head", "Hydraulic head (model units)", "head"),
+        ("deposited_mass", "Deposited mass (model units)", "deposited_mass"),
+    )
+    related_experiments = (
+        [base_experiment, experiment]
+        if base_experiment is not None
+        else [experiment]
     )
     try:
         import plotly.graph_objects as go
@@ -693,41 +1017,42 @@ def _save_relationship_plots(
             "`pip install -r requirements-plotting.txt`."
         ) from error
 
-    for variable, ylabel, series in comparisons:
-        if variable == "concentration":
-            line_times = experiment["times"]
-            scatter_values = series[np.searchsorted(experiment["times"], iteration_times)]
-        elif variable == "hydraulic_head":
-            line_times = experiment["times"]
-            scatter_values = series[np.searchsorted(experiment["times"], iteration_times)]
-        else:
-            line_times = iteration_times
-            scatter_values = series
-        if len(scatter_values) != len(k):
-            raise ValueError(
-                f"{variable} and hydraulic-conductivity iteration counts differ "
-                f"for {experiment['label']}."
-            )
-
+    for variable, ylabel, series_key in comparisons:
         base = (
             f"hydraulic_conductivity_vs_{variable}_{parameter_name}_"
             f"{_format_value(experiment['value'])}_{position}"
         )
         figure, axis = plt.subplots()
-        axis.plot(
-            iteration_times,
-            k,
-            marker="o",
-            label="Hydraulic conductivity (model units)",
-        )
         right_axis = axis.twinx()
-        right_axis.plot(
-            line_times,
-            series,
-            color="tab:orange",
-            marker="." if len(line_times) == len(series) else "o",
-            label=ylabel,
-        )
+        for related in related_experiments:
+            conductivity = related["hydraulic_conductivity"]
+            iteration_times = related["iteration_times"]
+            series = related[series_key]
+            if variable == "deposited_mass":
+                line_times = iteration_times
+                scatter_values = series
+            else:
+                line_times = related["times"]
+                scatter_values = series[
+                    np.searchsorted(related["times"], iteration_times)
+                ]
+            if len(scatter_values) != len(conductivity):
+                raise ValueError(
+                    f"{variable} and hydraulic-conductivity iteration counts "
+                    f"differ for {related['label']}."
+                )
+            axis.plot(
+                iteration_times,
+                conductivity,
+                marker="o",
+                label=f"{related['label']}: hydraulic conductivity",
+            )
+            right_axis.plot(
+                line_times,
+                series,
+                marker="." if len(line_times) == len(series) else "o",
+                label=f"{related['label']}: {ylabel}",
+            )
         axis.set_xlabel("Time (hours)")
         axis.set_ylabel("Hydraulic conductivity (model units)")
         right_axis.set_ylabel(ylabel)
@@ -740,31 +1065,38 @@ def _save_relationship_plots(
         plt.close(figure)
 
         line_figure = go.Figure()
-        line_figure.add_trace(
-            go.Scatter(
-                x=iteration_times,
-                y=k,
-                mode="lines+markers",
-                name="Hydraulic conductivity (model units)",
-                hovertemplate=(
-                    f"Parameter: {experiment['label']}<br>Time: %{{x}}<br>"
-                    "Hydraulic conductivity: %{y}<extra></extra>"
-                ),
+        for related in related_experiments:
+            conductivity = related["hydraulic_conductivity"]
+            iteration_times = related["iteration_times"]
+            series = related[series_key]
+            line_times = (
+                iteration_times if variable == "deposited_mass" else related["times"]
             )
-        )
-        line_figure.add_trace(
-            go.Scatter(
-                x=line_times,
-                y=series,
-                mode="lines+markers",
-                name=ylabel,
-                yaxis="y2",
-                hovertemplate=(
-                    f"Parameter: {experiment['label']}<br>Time: %{{x}}<br>"
-                    f"{ylabel}: %{{y}}<extra></extra>"
-                ),
+            line_figure.add_trace(
+                go.Scatter(
+                    x=iteration_times,
+                    y=conductivity,
+                    mode="lines+markers",
+                    name=f"{related['label']}: hydraulic conductivity",
+                    hovertemplate=(
+                        f"Parameter: {related['label']}<br>Time: %{{x}}<br>"
+                        "Hydraulic conductivity: %{y}<extra></extra>"
+                    ),
+                )
             )
-        )
+            line_figure.add_trace(
+                go.Scatter(
+                    x=line_times,
+                    y=series,
+                    mode="lines+markers",
+                    name=f"{related['label']}: {ylabel}",
+                    yaxis="y2",
+                    hovertemplate=(
+                        f"Parameter: {related['label']}<br>Time: %{{x}}<br>"
+                        f"{ylabel}: %{{y}}<extra></extra>"
+                    ),
+                )
+            )
         line_figure.update_layout(
             title=f"{experiment['label']}: conductivity and {variable}",
             xaxis_title="Time (hours)",
@@ -783,31 +1115,51 @@ def _save_relationship_plots(
         )
 
         scatter_figure, scatter_axis = plt.subplots()
-        scatter_axis.scatter(k, scatter_values)
+        for related in related_experiments:
+            conductivity = related["hydraulic_conductivity"]
+            iteration_times = related["iteration_times"]
+            series = related[series_key]
+            scatter_values = (
+                series
+                if variable == "deposited_mass"
+                else series[np.searchsorted(related["times"], iteration_times)]
+            )
+            scatter_axis.scatter(
+                conductivity, scatter_values, label=related["label"]
+            )
         scatter_axis.set_xlabel("Hydraulic conductivity (model units)")
         scatter_axis.set_ylabel(ylabel)
         scatter_axis.set_title(f"{experiment['label']}: conductivity vs {variable}")
+        scatter_axis.legend()
         scatter_figure.tight_layout()
         scatter_figure.savefig(figures_folder / f"{base}_scatter.png", dpi=160)
         plt.close(scatter_figure)
 
-        interactive_scatter = go.Figure(
-            data=[
+        interactive_scatter = go.Figure()
+        for related in related_experiments:
+            conductivity = related["hydraulic_conductivity"]
+            iteration_times = related["iteration_times"]
+            series = related[series_key]
+            scatter_values = (
+                series
+                if variable == "deposited_mass"
+                else series[np.searchsorted(related["times"], iteration_times)]
+            )
+            interactive_scatter.add_trace(
                 go.Scatter(
-                    x=k,
+                    x=conductivity,
                     y=scatter_values,
                     mode="markers",
-                    name=experiment["label"],
+                    name=related["label"],
                     customdata=iteration_times,
                     hovertemplate=(
-                        f"Parameter: {experiment['label']}<br>"
+                        f"Parameter: {related['label']}<br>"
                         "Time: %{customdata}<br>"
                         "Hydraulic conductivity: %{x}<br>"
                         f"{ylabel}: %{{y}}<extra></extra>"
                     ),
                 )
-            ]
-        )
+            )
         interactive_scatter.update_layout(
             title=f"{experiment['label']}: conductivity vs {variable}",
             xaxis_title="Hydraulic conductivity (model units)",
@@ -845,23 +1197,70 @@ def plot_sensitivity(folder):
     y = int(well_locations[0][0]) - 1
     x = int(well_locations[0][1]) - 1
     layer = int(well_layers[0][0]) - 1
+    sensitivity_metadata = [
+        experiment
+        for experiment in metadata["experiments"]
+        if experiment.get("status", "completed") == "completed"
+    ]
+    if not sensitivity_metadata:
+        raise ValueError(
+            f"No non-base sensitivity experiments are available in {output_folder}."
+        )
     experiments = [
         _read_experiment(output_folder, metadata, experiment, x, y, layer)
-        for experiment in metadata["experiments"]
+        for experiment in sensitivity_metadata
     ]
     if not experiments:
         raise ValueError(f"No completed experiments found in {output_folder}.")
 
     _ensure_matching_times(experiments, "times")
     _ensure_matching_times(experiments, "iteration_times")
+    base_experiment = None
+    if "base_case" in metadata:
+        base_case = metadata["base_case"]
+        base_experiment = _read_experiment(
+            output_folder,
+            metadata,
+            {
+                "value": (
+                    base_case["value"][0]
+                    if isinstance(base_case["value"], list)
+                    else base_case["value"]
+                ),
+                "folder": base_case["folder"],
+                "label": _base_case_label(
+                    metadata["parameter_name"], base_case["value"]
+                ),
+            },
+            x,
+            y,
+            layer,
+        )
+        _ensure_matching_times([base_experiment, *experiments], "times")
+        _ensure_matching_times([base_experiment, *experiments], "iteration_times")
+    plotted_experiments = (
+        [base_experiment, *experiments]
+        if base_experiment is not None
+        else experiments
+    )
     _save_comparison_plots(
         output_folder,
-        experiments,
+        plotted_experiments,
         metadata["parameter_name"],
         x,
         y,
         layer,
     )
+    if base_experiment is not None:
+        _save_ratio_plots(
+            output_folder,
+            experiments,
+            base_experiment,
+            metadata["parameter_name"],
+            x,
+            y,
+            layer,
+        )
     for experiment in experiments:
         _save_relationship_plots(
             output_folder,
@@ -870,6 +1269,7 @@ def plot_sensitivity(folder):
             x,
             y,
             layer,
+            base_experiment,
         )
     return output_folder / "figures"
 
@@ -951,4 +1351,3 @@ if __name__ == "__main__":
         print("Generating plots for sensitivity analysis results...")
         figures_folder = plot_sensitivity(args.folder or Path.cwd())
         print(f"Plots saved in: {figures_folder}")
-
