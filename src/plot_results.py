@@ -1,12 +1,15 @@
-"""Plot concentration and head results for a range of model timesteps.
+"""Plot results for a range of MODFLOW simulation folders.
 
 Usage from the project workspace::
 
     python src/plot_results.py 3 --ws test1
 
-The positional argument is the number of timestep folders to process. The
-optional ``--ws`` argument points to the folder containing ``timestep_0``,
-``timestep_1``, and so on; it defaults to the current working directory.
+The positional argument is the maximum number of ``sim_i`` folders to process.
+The optional ``--ws`` argument points to the project folder containing
+``simulations/`` and ``config.toml``; it defaults to the current working
+directory. Each processed simulation also gets row and column cross-sections
+of concentration, hydraulic conductivity, head, and deposited mass at each
+configured well. Head and concentration use the latest available output time.
 
 Interactive HTML plots require the optional dependency in
 ``requirements-plotting.txt``.
@@ -14,6 +17,7 @@ Interactive HTML plots require the optional dependency in
 
 from plot_conc_utils import plot_first_concentration, plot_last_concentration
 from plot_clogging_utils import (
+    get_simulation_folders,
     plot_deposited_mass_curve,
     plot_deposited_mass_curve_html,
     plot_hydraulic_conductivity_curve,
@@ -21,6 +25,7 @@ from plot_clogging_utils import (
     plot_breakthrough_curve_html,
     plot_head_curve_html,
 )
+from plot_cross_section import plot_cross_section
 from plot_flow_properties import plot_flow_properties
 from plot_head_utils import plot_first_head, plot_last_head
 from flow_model.load_flow_config import load_flow_config
@@ -33,6 +38,9 @@ from utils import (
 import argparse
 import math
 from pathlib import Path
+import warnings
+
+import flopy
 
 def plot_first_and_last_concentration(folder):
     plot_first_concentration(folder)
@@ -82,9 +90,9 @@ def main():
     flow_timestep_duration = _configured_timestep_duration(parameters, "mf")
     transport_timestep_duration = _configured_timestep_duration(parameters, "mt")
     #print(f"Flow timestep duration: {flow_timestep_duration}")
-    for simulation_i in range(args.n):
-        # Each timestep folder contains the results to plot for that step.
-        folder = Path(model_ws) / "simulations" / f"sim_{simulation_i}"
+    simulations_workspace = Path(model_ws) / "simulations"
+    simulation_folders = get_simulation_folders(simulations_workspace)
+    for folder in simulation_folders[: max(args.n, 0)]:
         print(folder)
         plot_first_and_last_concentration(folder)
         plot_first_and_last_head(folder)
@@ -93,6 +101,41 @@ def main():
             layer=0,
             mask=parameters["ibound"] != 0,
         )
+        simulation = flopy.mf6.MFSimulation.load(
+            sim_ws=str(folder),
+            verbosity_level=0,
+        )
+        gwf = simulation.get_model(parameters["modelname_mf"])
+        if gwf is None:
+            raise ValueError(
+                f"Flow model {parameters['modelname_mf']!r} was not found in {folder}."
+            )
+        for variable in (
+            "concentration",
+            "hydraulic_conductivity",
+            "head",
+            "deposited_mass",
+        ):
+            for (well_row, well_column) in parameters["well_location"]:
+                for line in (
+                    {"row": well_row - 1},
+                    {"column": well_column - 1},
+                ):
+                    try:
+                        plot_cross_section(
+                            gwf,
+                            folder,
+                            variable,
+                            line=line,
+                            modelname_mf=parameters["modelname_mf"],
+                            modelname_mt=parameters["modelname_mt"],
+                        )
+                    except (FileNotFoundError, ValueError) as error:
+                        warnings.warn(
+                            f"Skipping {variable} cross-section for {folder} "
+                            f"at {line}: {error}",
+                            RuntimeWarning,
+                        )
         for (well_row, well_column), well_layers in zip(
             parameters["well_location"], parameters["well_layer"]
         ):
