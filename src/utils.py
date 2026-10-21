@@ -332,3 +332,79 @@ def get_last_head(model_ws, modelname_mt="flow_model"):
     last_time = times_mt[-1]
     head = ucnobj.get_data(totim=last_time)
     return head
+
+
+def get_hydraulic_conductivity(model_ws, modelname="flow_model"):
+    sim = flopy.mf6.MFSimulation.load(sim_ws=model_ws, verbosity_level=0)
+    gwf = sim.get_model(modelname)
+    k = gwf.npf.k.array
+    return k
+
+def read_deposited_mass_file(model_ws):
+    """Load the deposited-mass array saved for one simulation iteration."""
+    path = Path(model_ws) / "deposited_mass.npy"
+    if not path.is_file():
+        raise FileNotFoundError(f"Deposited-mass file not found: {path}")
+    deposited_mass = np.load(path, allow_pickle=False)
+    if deposited_mass.ndim != 3:
+        raise ValueError(
+            f"Deposited mass in {path} must have shape (layer, row, column); "
+            f"got {deposited_mass.shape}."
+        )
+    return deposited_mass
+
+
+def read_hydraulic_conductivity(model_ws, modelname_mf="flow_model"):
+    """Read the conductivity array used by the flow model in one iteration."""
+    workspace = Path(model_ws)
+    name_file = workspace / "mfsim.nam"
+    if not name_file.is_file():
+        raise FileNotFoundError(f"MODFLOW simulation name file not found: {name_file}")
+
+    simulation = flopy.mf6.MFSimulation.load(
+        sim_ws=str(workspace),
+        verbosity_level=0,
+    )
+    gwf = simulation.get_model(modelname_mf)
+    if gwf is None:
+        raise ValueError(f"Flow model {modelname_mf!r} was not found in {workspace}.")
+    if gwf.npf is None or gwf.npf.k.array is None:
+        raise ValueError(
+            f"Flow model {modelname_mf!r} in {workspace} has no hydraulic "
+            "conductivity data."
+        )
+
+    shape = tuple(gwf.modelgrid.shape)
+    conductivity = np.asarray(gwf.npf.k.array)
+    if conductivity.ndim == 0:
+        conductivity = np.full(shape, conductivity)
+    if conductivity.shape != shape:
+        raise ValueError(
+            f"Hydraulic conductivity in {workspace} has shape "
+            f"{conductivity.shape}; expected {shape}."
+        )
+    return conductivity
+
+def get_specific_discharge(model_ws, modelname_mf="flow_model"):
+    """Read the specific discharge array saved for one simulation iteration."""
+    workspace = Path(model_ws)
+    name_file = workspace / "mfsim.nam"
+    if not name_file.is_file():
+        raise FileNotFoundError(f"MODFLOW simulation name file not found: {name_file}")
+
+    simulation = flopy.mf6.MFSimulation.load(
+        sim_ws=str(workspace),
+        verbosity_level=0,
+    )
+    gwf = simulation.get_model(modelname_mf)
+    if gwf is None:
+        raise ValueError(f"Flow model {modelname_mf!r} was not found in {workspace}.")
+
+    budget = gwf.output.budget()
+    spdis = budget.get_data(text="DATA-SPDIS", kstpkper=(0, 0))[0]
+    qx, qy, qz = flopy.utils.postprocessing.get_specific_discharge(spdis, gwf)
+
+    # Darcy flux magnitude for each cell
+    q_spec = np.sqrt(qx**2 + qy**2 + qz**2)
+    return q_spec
+

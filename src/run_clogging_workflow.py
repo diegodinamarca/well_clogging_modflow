@@ -6,7 +6,7 @@
 from pathlib import Path
 
 import numpy as np
-from utils import get_last_concentration, get_last_head
+from utils import get_last_concentration, get_last_head, get_hydraulic_conductivity, get_specific_discharge
 from flow_model.load_flow_config import load_flow_config
 from flow_model.run_flow_model import run_flow_model
 
@@ -66,9 +66,9 @@ def failed_run_modflow(buff, source="flow", model_ws="."):
         raise ValueError("Buffer source must be either 'flow' or 'transport'. Which model failed to run?")
     log_path.write_text("\n".join(buff))
 
-def calculate_deposition(concentration, dep_rate=0.01):
+def calculate_deposition(concentration, specific_discharge, dep_rate=0.01):
     # Placeholder for deposition calculation logic
-    deposited_mass = concentration * dep_rate
+    deposited_mass = concentration * specific_discharge * dep_rate
     return deposited_mass
 
 def initial_conditions(config_path):
@@ -138,7 +138,8 @@ def run_clogging_workflow(
         print(f"Mean concentration at iteration {iteration}: {round(np.mean(concentration), 2)}")
         print (f"#####################################################################")
 
-        deposited_mass = calculate_deposition(concentration, dep_rate=param_dic.get("deposition_rate", 0.01))
+        specific_discharge = get_specific_discharge(param_dic["model_ws"], param_dic["modelname_mf"])
+        deposited_mass = calculate_deposition(concentration, specific_discharge, dep_rate=param_dic.get("deposition_rate", 0.01))
         concentration = update_concentration(concentration, deposited_mass)
 
         # read saved deposited mass from previous iteration if it exists

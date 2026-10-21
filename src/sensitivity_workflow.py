@@ -22,6 +22,8 @@ from utils import (
     get_head_times,
     read_concentration_file,
     read_head_file,
+    read_hydraulic_conductivity,
+    read_deposited_mass_file,
 )
 
 
@@ -379,7 +381,7 @@ def run_sensitivity(
         base_folder.mkdir(parents=True, exist_ok=True)
         metadata["base_case"]["status"] = "running"
         _write_metadata(metadata_path, metadata)
-        result = run_clogging_workflow(config_path, base_parameters)
+        result = run_clogging_workflow(base_parameters)
         if not isinstance(result, dict) or result.get("success") is not True:
             metadata["base_case"]["status"] = "failed"
             metadata["base_case"]["result"] = (
@@ -424,7 +426,7 @@ def run_sensitivity(
         experiment_path.mkdir(parents=True, exist_ok=True)
         experiment["status"] = "running"
         _write_metadata(metadata_path, metadata)
-        result = run_clogging_workflow(config_path, param_dic)
+        result = run_clogging_workflow(param_dic)
 
         if not isinstance(result, dict) or result.get("success") is not True:
             experiment["status"] = "failed"
