@@ -6,36 +6,46 @@
 from pathlib import Path
 
 import numpy as np
-from utils import get_last_concentration, get_last_head, get_hydraulic_conductivity, get_specific_discharge
+from utils import get_last_concentration, get_last_head, get_specific_discharge
 from flow_model.load_flow_config import load_flow_config
 from flow_model.run_flow_model import run_flow_model
 
-def calculate_porosity(porosity, deposited_mass):
+def calculate_porosity(porosity, deposited_mass, critical_porosity=0.05, beta=0.01):
     # Calculate new porosity based on deposited mass
-    new_porosity = porosity - porosity * np.mean(deposited_mass)  # Example: 10% of deposited mass
+    new_porosity = np.maximum(porosity - beta*deposited_mass, critical_porosity)
     return new_porosity
 
 def calculate_hydraulic_conductivity(
     porosity, reference_porosity, reference_conductivity, method="kozeny_carman",
-    time = None, lamb = None, linear_slope=None, affected_cells=None
+    time = None, exp_coef = None, power_coef=None, linear_slope=None, deposited_mass=None, dep_threshold=None
 ):
-    if not method in ["kozeny_carman", "exp_decay", "lm"]:
+    if not method in ["kozeny_carman", "exp_decay", "lm", "ravshanov", "power_law"]:
         raise ValueError("Unsupported method for calculating hydraulic conductivity.")
     if not 0 < reference_porosity < 1:
         raise ValueError("Reference porosity must be between 0 and 1.")
     if np.any(porosity <= 0) or np.any(porosity >= 1):
         raise ValueError("Porosity values must be between 0 and 1.")
+
+    
+    if method == "ravshanov":
+        return reference_conductivity * (porosity / reference_porosity) ** power_coef * np.exp(-exp_coef * deposited_mass) 
+    if method == "power_law":
+        return reference_conductivity * (porosity / reference_porosity) ** power_coef
     if method == "kozeny_carman":
-        return reference_conductivity * (porosity / reference_porosity) ** 3 * (
+        return reference_conductivity * (porosity / reference_porosity) ** 2 * (
             (1 - reference_porosity) / (1 - porosity)
         ) ** 2
     if method == "exp_decay":
-        if time is None or lamb is None:
-            raise ValueError("Time and lambda must be provided for exponential decay method.")
-        return reference_conductivity * np.exp(-lamb * time)
+        if time is None or exp_coef is None:
+            raise ValueError("Time and exponential coefficient must be provided for exponential decay method.")
+        return reference_conductivity * np.exp(-exp_coef * time)
     if method == "lm":
         if linear_slope is None:
             raise ValueError("Parameter linear_slope must be provided for linear method.")
+
+        # Get affected cells where deposited mass exceeds the threshold
+        threshold = dep_threshold
+        affected_cells = deposited_mass > threshold
         #print(f"Reducing hydraulic conductivity in affected cells by a factor of {1-linear_slope}%.")
         reference_conductivity[affected_cells] *= linear_slope
         return reference_conductivity
@@ -66,9 +76,21 @@ def failed_run_modflow(buff, source="flow", model_ws="."):
         raise ValueError("Buffer source must be either 'flow' or 'transport'. Which model failed to run?")
     log_path.write_text("\n".join(buff))
 
-def calculate_deposition(concentration, specific_discharge, dep_rate=0.01):
+def calculate_deposition(concentration, deposited_mass, specific_discharge, 
+                         dep_rate, mob_rate, update_rates = False, 
+                         ref_porosity=None, porosity=None, power_dep_rate=None, power_mob_rate=None):
     # Placeholder for deposition calculation logic
-    deposited_mass = concentration * specific_discharge * dep_rate
+    if update_rates:
+        if ref_porosity <= 0 or porosity <= 0:
+            raise ValueError("Reference porosity and current porosity must be greater than zero.")
+        if ref_porosity is None or porosity is None:
+            raise ValueError("Reference porosity and current porosity must not be None.")
+        if power_dep_rate is None or power_mob_rate is None:
+            raise ValueError("Power rates for deposition and mobilization must not be None.")
+        dep_rate = (ref_porosity/porosity)**power_dep_rate
+        mob_rate = (ref_porosity/porosity)**power_mob_rate
+
+    deposited_mass = concentration * dep_rate - deposited_mass * mob_rate * specific_discharge 
     return deposited_mass
 
 def initial_conditions(config_path):
@@ -119,6 +141,13 @@ def run_clogging_workflow(
     for iteration in range(iterations):
         param_dic = set_model_workspace(param_dic, iteration, base_workspace)
         _, _, success = run_modflow(param_dic)
+
+        #get reference porosity
+        if iteration == 0:
+            reference_porosity = param_dic["porosity"]
+            param_dic["reference_porosity"] = reference_porosity
+            # initiate deposited mass array
+            deposited_mass = np.zeros_like(param_dic["hk"])
         if not success:
             return {
                 "success": False,
@@ -139,12 +168,18 @@ def run_clogging_workflow(
         print (f"#####################################################################")
 
         specific_discharge = get_specific_discharge(param_dic["model_ws"], param_dic["modelname_mf"])
-        deposited_mass = calculate_deposition(concentration, specific_discharge, dep_rate=param_dic.get("deposition_rate", 0.01))
+        deposited_mass = calculate_deposition(concentration, deposited_mass, specific_discharge, 
+                                              dep_rate=param_dic["dep_rate"], 
+                                              mob_rate=param_dic["mob_rate"],
+                                              update_rates=param_dic["update_rates"],
+                                              ref_porosity=param_dic["reference_porosity"],
+                                              porosity=param_dic["porosity"],
+                                              power_dep_rate=param_dic["power_dep_rate"],
+                                              power_mob_rate=param_dic["power_mob_rate"])
         concentration = update_concentration(concentration, deposited_mass)
 
         # read saved deposited mass from previous iteration if it exists
         deposited_mass_path = Path(param_dic["model_ws"]) / "deposited_mass.npy"
-
 
         if iteration > 0:
             previous_workspace = get_previous_workspace(param_dic["model_ws"], iteration)
@@ -153,24 +188,30 @@ def run_clogging_workflow(
                 previous_deposited_mass = np.load(deposited_mass_path)
                 deposited_mass += previous_deposited_mass
 
-        #porosity = calculate_porosity(param_dic["porosity"], deposited_mass)
-        porosity = param_dic["porosity"]
-
-        # get cells where deposited mass is greater than a threshold
-        threshold = param_dic.get("deposition_threshold", 0.001)
-        affected_cells = deposited_mass > threshold
+        
         
         # Reduce hydraulic conductivity in affected cells
-        K = calculate_hydraulic_conductivity(
-            porosity,
-            param_dic["porosity"],
-            param_dic["hk"],
-            method=param_dic["k_update_method"],
-            time=iteration,
-            lamb=param_dic["lambdak"],
-            linear_slope=param_dic["k_linear_slope"],
-            affected_cells=affected_cells
-        )
+        if not param_dic["k_update_method"] == "none":
+            porosity = calculate_porosity(param_dic["porosity"], deposited_mass,
+                                                   critical_porosity=param_dic["critical_porosity"],
+                                                   beta=param_dic["beta"])
+            porosity = param_dic["porosity"]
+            
+            K = calculate_hydraulic_conductivity(
+                porosity,
+                param_dic["reference_porosity"],
+                param_dic["hk"],
+                method=param_dic["k_update_method"],
+                time=iteration,
+                exp_coef=param_dic["k_exp"],
+                power_coef=param_dic["k_power"],
+                linear_slope=param_dic["k_linear_slope"],
+                deposited_mass=deposited_mass,
+                dep_threshold=param_dic["dep_threshold"]
+            )
+        else:
+            porosity = param_dic["reference_porosity"]
+            K = param_dic["hk"]
         param_dic = update_parameters_list(param_dic, K, porosity, head, concentration)
         np.save(
             Path(param_dic["model_ws"]) / "deposited_mass.npy",

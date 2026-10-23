@@ -316,8 +316,11 @@ def load_flow_config(config_path=None):
         "k_update_method": methods["k_update_method"],
 
         # --- methods parameters ---
-        "lambdak": methods_parameters["lambdak"],
-        "k_linear_slope": methods_parameters.get("k_linear_slope"),
+        "k_exp": methods_parameters["k_exp"],
+        "k_power": methods_parameters["k_power"],
+        "k_linear_slope": methods_parameters["k_linear_slope"],
+        "critical_porosity": methods_parameters["critical_porosity"],
+        "beta": methods_parameters["beta"],
 
         # --- grid ---
         "nlay": nlay,
@@ -357,9 +360,13 @@ def load_flow_config(config_path=None):
 
         # --- transport ---
         "porosity": prsity,
-        "deposition_rate": transport.get("deposition_rate", 0.01),
-        "deposition_threshold": transport.get("deposition_threshold", 0.001),
-        
+        "dep_rate": transport["deposition_rate"],
+        "mob_rate": transport["mobilization_rate"],
+        "dep_threshold": transport["deposition_threshold"],
+        "update_rates": transport["update_rates"],
+        "power_dep_rate":transport["power_dep_rate"],
+        "power_mob_rate":transport["power_mob_rate"],
+
         # --- recharge ---
         "recharge": recharge,
 
